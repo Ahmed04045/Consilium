@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS records(key TEXT PRIMARY KEY,revision INTEGER NOT NULL,json TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS sources(id TEXT PRIMARY KEY,revision INTEGER NOT NULL,json TEXT NOT NULL,file_hash TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(id UNINDEXED,title,body,tags);
+CREATE TABLE IF NOT EXISTS chunks(source_id TEXT NOT NULL,revision INTEGER NOT NULL,hash TEXT NOT NULL,text TEXT NOT NULL,PRIMARY KEY(source_id,hash));
+CREATE TABLE IF NOT EXISTS embedding_indexes(id TEXT PRIMARY KEY,identity TEXT NOT NULL,provider_kind TEXT NOT NULL,endpoint_identity TEXT NOT NULL,model_name TEXT NOT NULL,model_fingerprint TEXT,dimensions INTEGER NOT NULL,distance_metric TEXT NOT NULL,normalization_version INTEGER NOT NULL,chunker_version INTEGER NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL,completed_at TEXT);
+CREATE TABLE IF NOT EXISTS embedding_jobs(index_id TEXT NOT NULL,source_id TEXT NOT NULL,revision INTEGER NOT NULL,hash TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,next_attempt INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(index_id,source_id,hash));
+CREATE TABLE IF NOT EXISTS vectors(index_id TEXT NOT NULL,source_id TEXT NOT NULL,revision INTEGER NOT NULL,hash TEXT NOT NULL,vector TEXT NOT NULL,PRIMARY KEY(index_id,source_id,hash));
+CREATE INDEX IF NOT EXISTS jobs_pending ON embedding_jobs(status,next_attempt);
+PRAGMA user_version=1;

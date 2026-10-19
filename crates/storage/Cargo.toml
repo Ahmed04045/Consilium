@@ -1,0 +1,13 @@
+[package]
+name = "consilium-storage"
+version = "0.1.0"
+edition = "2021"
+[dependencies]
+consilium-domain.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+sha2 = "0.10"
+tempfile = "3"
+

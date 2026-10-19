@@ -1,0 +1,15 @@
+[workspace]
+members = ["crates/domain", "crates/storage", "crates/adapters", "crates/application", "apps/desktop/src-tauri"]
+resolver = "2"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1", features = ["full"] }
+consilium-domain = { path = "crates/domain" }
+consilium-storage = { path = "crates/storage" }
+consilium-adapters = { path = "crates/adapters" }
+consilium-application = { path = "crates/application" }

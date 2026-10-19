@@ -1,0 +1,74 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tasks"
+  ],
+  "properties": {
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "date",
+          "time",
+          "minutes",
+          "color",
+          "description",
+          "completed",
+          "label"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "time": {
+            "type": "string",
+            "pattern": "^([0-2][0-9]:[0-5][0-9])?$"
+          },
+          "minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "color": {
+            "enum": [
+              "gray",
+              "blue",
+              "green",
+              "yellow",
+              "purple",
+              "red"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 12000
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      }
+    }
+  }
+}

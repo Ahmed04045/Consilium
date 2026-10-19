@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Consilium structured record envelope",
+  "type": "object",
+  "required": ["schema_version", "id", "revision", "created_at", "updated_at", "value"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "format": "uuid"},
+    "revision": {"type": "integer", "minimum": 0},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "value": {}
+  },
+  "additionalProperties": false
+}

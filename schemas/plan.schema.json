@@ -1,0 +1,71 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "date",
+    "timezone",
+    "budget",
+    "blocks"
+  ],
+  "properties": {
+    "date": {
+      "type": "string"
+    },
+    "timezone": {
+      "type": "string"
+    },
+    "budget": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1440
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "track_id",
+          "objective",
+          "minutes",
+          "completion_criterion",
+          "locked",
+          "completed"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "track_id": {
+            "type": "string"
+          },
+          "objective": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minutes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "completion_criterion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "resource_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+[package]
+name = "consilium"
+version = "1.0.0"
+edition = "2021"
+
+[[bin]]
+name = "consilium-desktop"
+path = "src/main.rs"
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+[dependencies]
+tauri = { version = "2", features = [] }
+serde_json.workspace = true
+consilium-application.workspace = true
+consilium-storage.workspace = true
+consilium-adapters.workspace = true
+tokio.workspace = true
+tokio-util = "0.7"
+webbrowser = "1"
+rfd = "0.15"
+tempfile = "3"
