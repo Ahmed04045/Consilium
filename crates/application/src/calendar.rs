@@ -647,6 +647,27 @@ mod tests {
         });
         assert!(validate(&w).is_err());
     }
+    #[test]
+    fn full_local_schema_still_rejects_excess_tasks_and_invalid_strings() {
+        let schema: Value =
+            serde_json::from_str(include_str!("../../../schemas/calendar-tasks.schema.json"))
+                .unwrap();
+        let task = json!({"id":"test","title":"Practice","date":"2026-10-21","time":"10:00","minutes":15,"color":"green","description":"Read","completed":false,"label":"Practice"});
+        assert!(jsonschema::is_valid(
+            &schema,
+            &json!({"tasks":vec![task.clone();64]})
+        ));
+        assert!(!jsonschema::is_valid(
+            &schema,
+            &json!({"tasks":vec![task.clone();65]})
+        ));
+        let mut invalid = task.clone();
+        invalid["title"] = json!("x".repeat(301));
+        assert!(!jsonschema::is_valid(&schema, &json!({"tasks":[invalid]})));
+        let mut invalid = task;
+        invalid["date"] = json!("tomorrow");
+        assert!(!jsonschema::is_valid(&schema, &json!({"tasks":[invalid]})));
+    }
     #[tokio::test]
     async fn cloud_requires_explicit_fresh_context_consent() {
         let temp = tempfile::tempdir().unwrap();
@@ -691,14 +712,24 @@ mod tests {
             labels: vec![],
             onboarded: true,
             timezone: "Asia/Qatar".into(),
-            calendars: vec![Calendar {
-                id: "default".into(),
-                name: "Calendar".into(),
-                tasks: vec![
-                    task("2020-01-01", "09:00", 30),
-                    task("2026-10-18", "09:00", 30),
-                ],
-            }],
+            calendars: vec![
+                Calendar {
+                    id: "default".into(),
+                    name: "Calendar".into(),
+                    tasks: vec![
+                        task("2020-01-01", "09:00", 30),
+                        task("2026-10-18", "09:00", 30),
+                    ],
+                },
+                Calendar {
+                    id: "other".into(),
+                    name: "Other calendar".into(),
+                    tasks: vec![Task {
+                        title: "OTHER CALENDAR TASK".into(),
+                        ..task("2026-10-18", "10:00", 30)
+                    }],
+                },
+            ],
         };
         let p = context_packet(
             &w,
@@ -708,6 +739,7 @@ mod tests {
         .unwrap();
         assert_eq!(p["existing_tasks"].as_array().unwrap().len(), 1);
         assert!(!p.to_string().contains("PRIVATE"));
+        assert!(!p.to_string().contains("OTHER CALENDAR TASK"));
         assert!(validate_suggestions(&[task("2026-10-18", "10:00", 30)], &p).is_ok());
         assert!(validate_suggestions(&[task("2026-10-18", "09:15", 30)], &p).is_err());
         assert!(validate_suggestions(&[task("2026-10-18", "10:00", 100)], &p).is_err());

@@ -17,6 +17,77 @@ async fn rpc(
     action: String,
     payload: Value,
 ) -> Result<Value, String> {
+    if action == "choose_task_folder" {
+        let snapshot = state
+            .engine
+            .run("workspace_load", payload.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+        if let Some(folder) = rfd::AsyncFileDialog::new()
+            .set_title("Link a folder to this workspace")
+            .pick_folder()
+            .await
+        {
+            let canonical = folder
+                .path()
+                .canonicalize()
+                .map_err(|_| "Folder is unavailable")?;
+            let mut next = payload;
+            next["path"] = Value::String(canonical.to_string_lossy().to_string());
+            next["revision"] = snapshot["folder"]["revision"].clone();
+            return state
+                .engine
+                .run("workspace_set_folder", next)
+                .await
+                .map_err(|e| e.to_string());
+        }
+        return Ok(serde_json::json!({"cancelled":true}));
+    }
+    if action == "open_task_folder" {
+        let snapshot = state
+            .engine
+            .run("workspace_load", payload)
+            .await
+            .map_err(|e| e.to_string())?;
+        let path = snapshot["folder"]["value"]["path"]
+            .as_str()
+            .ok_or("No linked folder")?;
+        if path.is_empty() || !std::path::Path::new(path).is_dir() {
+            return Err("The linked folder is unavailable".into());
+        }
+        std::process::Command::new("explorer.exe")
+            .arg(path)
+            .spawn()
+            .map_err(|_| "Could not open folder")?;
+        return Ok(Value::Null);
+    }
+    if action == "export_workspace_document" {
+        let bytes: Vec<u8> = serde_json::from_value(payload["bytes"].clone())
+            .map_err(|_| "Invalid document export")?;
+        if bytes.len() > 8_000_000 {
+            return Err("Document export exceeds 8 MB".into());
+        }
+        let name = payload["name"].as_str().unwrap_or("document.docx");
+        let safe_name = std::path::Path::new(name)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("document.docx");
+        if let Some(file) = rfd::AsyncFileDialog::new()
+            .set_file_name(safe_name)
+            .save_file()
+            .await
+        {
+            use std::io::Write;
+            let mut temp =
+                tempfile::NamedTempFile::new_in(file.path().parent().ok_or("Invalid destination")?)
+                    .map_err(|e| e.to_string())?;
+            temp.write_all(&bytes).map_err(|e| e.to_string())?;
+            temp.as_file().sync_all().map_err(|e| e.to_string())?;
+            temp.persist(file.path()).map_err(|e| e.to_string())?;
+            return Ok(serde_json::json!({"saved":true}));
+        }
+        return Ok(serde_json::json!({"saved":false}));
+    }
     if action == "new_window" {
         let label = format!(
             "workspace-{}",

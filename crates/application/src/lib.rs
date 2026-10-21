@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 mod calendar;
+mod workspace;
 use consilium_adapters::{discover, Provider};
 use consilium_domain::*;
 use consilium_storage::{Hit, Record, Store};
@@ -241,6 +242,9 @@ impl Engine {
         )
     }
     pub async fn run(&self, action: &str, payload: Value) -> Result<Value> {
+        if action.starts_with("workspace_") {
+            return self.workspace_action(action, payload).await;
+        }
         if matches!(action, "propose_plan" | "extract_memory")
             && consilium_adapters::cloud(&self.settings()?.value.provider)
         {

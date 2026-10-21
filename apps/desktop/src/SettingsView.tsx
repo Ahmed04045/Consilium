@@ -16,9 +16,15 @@ export function SettingsView({
   const cloud = ["gemini", "openrouter"].includes(settings.provider);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [failed, setFailed] = useState(false);
+  const dirty =
+    JSON.stringify(settings) !== JSON.stringify(data.settings.value);
   async function run(action: string, payload: unknown = {}) {
+    if (busy) return;
     setBusy(true);
     setMessage("");
+    setFailed(false);
+    onError("");
     try {
       await rpc(action, payload);
       await refresh();
@@ -28,7 +34,8 @@ export function SettingsView({
           : "Saved",
       );
     } catch (e) {
-      onError(String(e));
+      setFailed(true);
+      setMessage(String(e));
     } finally {
       setBusy(false);
     }
@@ -60,7 +67,7 @@ export function SettingsView({
                     e.target.value === "ollama"
                       ? "http://127.0.0.1:11434"
                       : e.target.value === "gemini"
-                        ? "https://generativelanguage.googleapis.com/v1beta/openai"
+                        ? "https://generativelanguage.googleapis.com/v1beta"
                         : e.target.value === "openrouter"
                           ? "https://openrouter.ai/api/v1"
                           : "http://127.0.0.1:1234/v1",
@@ -86,7 +93,11 @@ export function SettingsView({
             <input
               required
               readOnly={cloud}
-              value={settings.endpoint}
+              value={
+                settings.provider === "gemini"
+                  ? "https://generativelanguage.googleapis.com/v1beta"
+                  : settings.endpoint
+              }
               onChange={(e) =>
                 setSettings({ ...settings, endpoint: e.target.value })
               }
@@ -135,17 +146,35 @@ export function SettingsView({
               }
             />
           </label>
-          <button className="primary" disabled={busy}>
-            Save model settings
-          </button>
-          <span className="muted" role="status">
-            {busy ? "Working…" : message}
-          </span>
+          <div className="provider-actions">
+            <button className="primary" disabled={busy}>
+              Save model settings
+            </button>
+            <button
+              type="button"
+              disabled={busy || dirty || !data.settings.value.chat_model}
+              onClick={() => void run("test_model")}
+            >
+              Test saved model connection
+            </button>
+          </div>
+          {dirty && (
+            <p className="small muted">
+              Save your model settings before testing the connection.
+            </p>
+          )}
+          <p
+            className={
+              failed ? "provider-feedback danger" : "provider-feedback muted"
+            }
+            role={failed ? "alert" : "status"}
+          >
+            {busy
+              ? "Working… Temporary server failures may be retried twice."
+              : message}
+          </p>
         </form>
       </section>
-      <button disabled={busy} onClick={() => void run("test_model")}>
-        Test saved model connection
-      </button>
 
       <section>
         <h2>Embedding index</h2>

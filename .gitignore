@@ -17,3 +17,4 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 db/
+apps/desktop/public/wordcraft/generated/

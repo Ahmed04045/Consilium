@@ -1,4 +1,4 @@
-# Consilium 1.0 — local first-version build
+# Consilium 1.0 Preview
 
 This release keeps the calendar and assistant local by default. Windows installer is unsigned. Phone synchronization is not enabled.
 
@@ -27,7 +27,7 @@ Use android-companion-prompt.md in Google AI Studio. It specifies an offline And
 
 ## Verification and remaining checks
 
-30 Rust tests and 8 browser regressions pass; one optional search benchmark remains ignored. Tests cover context history/revisions, old-calendar migration defaults, labels, direct search, minute placement, API-key failure recovery, persistence, model-output repair, cancellation and embedding identity. The final native packaged smoke test passed; details are in validation.md. Live provider quality for these expanded prompts, physical-phone integration, clean-machine install, signing and performance measurements remain outstanding.
+34 Rust tests pass, plus an explicitly run Windows Credential Manager test using isolated synthetic keys. The earlier 8 browser regressions pass. One optional search benchmark remains ignored. Tests cover context history/revisions, old-calendar migration defaults, labels, direct search, minute placement, API-key failure recovery, persistence, model-output repair, cancellation and embedding identity. See validation.md and release-verification.md for evidence and limitations. Live provider quality for these expanded prompts, physical-phone integration, clean-machine install, signing and performance measurements remain outstanding. This stays a preview by the owner's decision; no separate clean Windows environment is available.
 
 
 Desktop icon polish: regenerated Windows icons from windows-icon-large.png, preserving the original logo and transparency while increasing visible height from approximately 76% to 96% of the icon canvas. In-app mark unchanged.

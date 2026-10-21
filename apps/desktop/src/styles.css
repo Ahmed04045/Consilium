@@ -2,7 +2,7 @@
 :root {
   font-family: "Google Sans Variable";
   color: #ececec;
-  background: #212121;
+  background: var(--surface, #212121);
   font-synthesis: none;
   font-size: 14px;
   color-scheme: dark;
@@ -35,7 +35,7 @@ button {
   gap: 8px;
 }
 button:hover {
-  background: #333;
+  background: var(--hover, #333);
 }
 button:disabled {
   opacity: 0.35;
@@ -52,8 +52,8 @@ input,
 textarea,
 select {
   color: inherit;
-  background: #292929;
-  border: 1px solid #444;
+  background: var(--input, #292929);
+  border: 1px solid var(--line-strong, #444);
   border-radius: 7px;
   padding: 10px 12px;
   width: 100%;
@@ -99,7 +99,7 @@ p {
 }
 .primary {
   background: #ececec;
-  color: #171717;
+  color: var(--chrome, #171717);
 }
 .primary:hover {
   background: #d2d2d2;
@@ -188,7 +188,7 @@ p {
   top: 29px;
   min-width: 265px;
   padding: 6px;
-  background: #252525;
+  background: var(--panel, #252525);
   border: 1px solid #3a3a3a;
   border-radius: 9px;
   box-shadow: 0 12px 30px #0008;
@@ -299,10 +299,10 @@ p {
   padding: 0 15px;
 }
 .tabs > [aria-selected="true"] {
-  background: #212121;
+  background: var(--surface, #212121);
   color: #eee;
-  border: 1px solid #333;
-  border-bottom: 1px solid #212121;
+  border: 1px solid var(--hover, #333);
+  border-bottom: 1px solid var(--surface, #212121);
 }
 .tabs > .icon-button {
   width: 30px;
@@ -346,7 +346,7 @@ p {
   min-width: 40px;
 }
 .add-button {
-  border: 1px solid #444;
+  border: 1px solid var(--line-strong, #444);
   margin-left: 8px;
   padding: 8px 14px;
 }
@@ -355,10 +355,15 @@ p {
   border-radius: 12px;
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-template-rows: 34px repeat(var(--weeks), minmax(90px, 1fr));
+  grid-template-rows: 34px repeat(
+      var(--weeks),
+      minmax(var(--month-row-height, 90px), 1fr)
+    );
+  row-gap: var(--calendar-row-gap, 0px);
+  column-gap: var(--calendar-column-gap, 0px);
   overflow: auto;
   flex: 1;
-  background: #1d1d1d;
+  background: var(--canvas, #1d1d1d);
 }
 .weekday {
   text-align: center;
@@ -498,7 +503,7 @@ p {
   border-left: 1px solid #373737;
   padding: 20px;
   overflow: auto;
-  background: #1b1b1b;
+  background: var(--chrome, #1b1b1b);
 }
 .assistant header,
 dialog header {
@@ -545,9 +550,9 @@ dialog header {
   white-space: nowrap;
 }
 dialog {
-  background: #242424;
+  background: var(--panel, #242424);
   color: #ececec;
-  border: 1px solid #444;
+  border: 1px solid var(--line-strong, #444);
   border-radius: 15px;
   width: 510px;
   max-height: 90dvh;
@@ -608,7 +613,7 @@ legend {
   height: 29px;
   border-radius: 50%;
   background: var(--task-color);
-  color: #171717;
+  color: var(--chrome, #171717);
   padding: 0;
 }
 .swatch:hover {
@@ -642,7 +647,7 @@ legend {
 }
 .settings-view section {
   max-width: 620px;
-  border-bottom: 1px solid #383838;
+  border-bottom: 1px solid var(--line, #383838);
   padding-bottom: 28px;
   margin-bottom: 30px;
 }
@@ -664,7 +669,7 @@ legend {
 .onboarding {
   position: fixed;
   inset: 0;
-  background: #212121;
+  background: var(--surface, #212121);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -682,7 +687,7 @@ legend {
   justify-content: center;
   border-radius: 18px;
   background: #2e2e2e;
-  border: 1px solid #444;
+  border: 1px solid var(--line-strong, #444);
   color: #dedede;
 }
 .onboarding-card {
@@ -768,22 +773,22 @@ legend {
 dialog[aria-label="New task"] .primary,
 dialog[aria-label="Edit task"] .primary,
 dialog[aria-label="New calendar"] .primary {
-  background: #9bc5a6;
+  background: var(--accent, #9bc5a6);
   color: #16251b;
-  border-color: #9bc5a6;
+  border-color: var(--accent, #9bc5a6);
 }
 .add-button:hover,
 .assistant .primary:hover,
 dialog[aria-label="New task"] .primary:hover,
 dialog[aria-label="Edit task"] .primary:hover,
 dialog[aria-label="New calendar"] .primary:hover {
-  background: #b0d5b9;
+  background: color-mix(in srgb, var(--accent, #9bc5a6) 80%, white);
 }
 .calendar-task {
   min-height: 42px;
   padding: 8px 9px;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--task-color) 24%, #242424);
+  background: color-mix(in srgb, var(--task-color) 24%, var(--panel, #242424));
   border-left: 3px solid var(--task-color);
   align-items: flex-start;
   transition:
@@ -791,7 +796,7 @@ dialog[aria-label="New calendar"] .primary:hover {
     transform 0.15s ease;
 }
 .calendar-task:hover {
-  background: color-mix(in srgb, var(--task-color) 35%, #242424);
+  background: color-mix(in srgb, var(--task-color) 35%, var(--panel, #242424));
   transform: translateY(-1px);
 }
 .calendar-task > span:last-of-type {
@@ -849,7 +854,7 @@ dialog[aria-label="New calendar"] .primary:hover {
 }
 .search-view .command-results button {
   min-height: 48px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--hover, #333);
   border-radius: 0;
 }
 .app-mark {
@@ -948,7 +953,7 @@ dialog header .tip {
   width: min(320px, 80%);
   height: 27px;
   border: 1px solid #3a3a3a;
-  background: #242424;
+  background: var(--panel, #242424);
   color: #aaa;
   font-size: 12px;
   justify-content: flex-start;
@@ -961,7 +966,7 @@ dialog header .tip {
 }
 .sync-preview {
   padding: 12px;
-  border: 1px solid #444;
+  border: 1px solid var(--line-strong, #444);
   border-radius: 8px;
   margin-top: 14px;
 }
@@ -987,7 +992,7 @@ dialog header .tip {
   left: 0;
   right: 0;
   background: #262626;
-  border: 1px solid #444;
+  border: 1px solid var(--line-strong, #444);
   border-radius: 12px;
   padding: 6px;
   z-index: 100;
@@ -1020,7 +1025,11 @@ dialog header .tip {
 .label-chip {
   border-radius: 16px;
   padding: 5px 10px;
-  background: color-mix(in srgb, var(--task-color, #8ab89a) 18%, #252525);
+  background: color-mix(
+    in srgb,
+    var(--task-color, #8ab89a) 18%,
+    var(--panel, #252525)
+  );
   border: 1px solid var(--task-color, #555);
 }
 .label-chip[aria-pressed="false"] {
@@ -1031,8 +1040,8 @@ dialog header .tip {
   gap: 8px;
   flex-wrap: wrap;
   padding: 12px;
-  background: #292929;
-  border: 1px solid #444;
+  background: var(--input, #292929);
+  border: 1px solid var(--line-strong, #444);
   border-radius: 10px;
 }
 .label-manager input {
@@ -1050,7 +1059,7 @@ dialog header .tip {
   flex: 1;
   overflow: auto;
   min-height: 0;
-  border: 1px solid #383838;
+  border: 1px solid var(--line, #383838);
   border-radius: 12px;
   scrollbar-width: thin;
 }
@@ -1058,7 +1067,7 @@ dialog header .tip {
   display: grid;
   position: sticky;
   top: 0;
-  background: #252525;
+  background: var(--panel, #252525);
   z-index: 5;
   min-height: 48px;
   align-items: center;
@@ -1067,7 +1076,7 @@ dialog header .tip {
 .timeline-body {
   display: grid;
   position: relative;
-  height: 1440px;
+  height: calc(var(--hour-height, 60px) * 24);
 }
 .hour-labels {
   position: relative;
@@ -1080,15 +1089,15 @@ dialog header .tip {
 }
 .timeline-day {
   position: relative;
-  border-left: 1px solid #383838;
+  border-left: 1px solid var(--line, #383838);
   min-width: 0;
 }
 .hour-slot {
   position: absolute;
-  height: 60px;
+  height: var(--hour-height, 60px);
   width: 100%;
   border: none;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--hover, #333);
   border-radius: 0;
   background: transparent;
 }
@@ -1109,6 +1118,168 @@ dialog header .tip {
   border: 1px solid #555;
   border-radius: 5px;
 }
+
+.task-tab {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  border-right: 1px solid var(--line, #333);
+  max-width: 260px;
+}
+.task-tab [role="tab"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.task-tab:has([aria-selected="true"]) {
+  background: var(--panel, #292929);
+  border-radius: 8px 8px 0 0;
+}
+.task-hover-card {
+  position: fixed;
+  z-index: 100;
+  width: 320px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--line-strong, #444);
+  background: var(--panel, #292929);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px #0007;
+  animation: dialog-enter 120ms ease-out;
+}
+.task-hover-card strong {
+  display: block;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.task-hover-card p {
+  font-size: 12px;
+  margin: 8px 0;
+}
+.hover-description {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hover-actions,
+.workspace-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.hover-actions {
+  margin-top: 12px;
+}
+.task-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.task-workspace-header {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--line, #383838);
+}
+.task-workspace-header h1 {
+  font-size: 21px;
+  overflow-wrap: anywhere;
+  margin: 4px 0;
+}
+.workspace-document-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line, #383838);
+  font-size: 12px;
+}
+.workspace-document-toolbar [aria-pressed="true"] {
+  background: var(--hover, #333);
+}
+.workspace-document-toolbar [role="status"] {
+  margin-left: auto;
+}
+.task-workspace-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+.workspace-document {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+.wordcraft-frame {
+  border: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  min-height: 0;
+}
+.workspace-side {
+  width: 300px;
+  flex-shrink: 0;
+  overflow: auto;
+  padding: 16px;
+  border-left: 1px solid var(--line, #383838);
+}
+.workspace-side [role="tablist"] {
+  display: flex;
+  border-bottom: 1px solid var(--line, #383838);
+  margin-bottom: 16px;
+}
+.workspace-side [aria-selected="true"] {
+  background: var(--hover, #333);
+}
+.workspace-side h2 {
+  font-size: 16px;
+}
+.workspace-side p {
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.workspace-side .small {
+  font-size: 11px;
+}
+.folder-path {
+  word-break: break-all;
+}
+.workspace-messages {
+  max-height: 45vh;
+  overflow: auto;
+}
+.workspace-messages article {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line, #333);
+}
+.workspace-messages strong {
+  font-weight: 500;
+  font-size: 12px;
+  color: #aaa;
+}
+.workspace-error {
+  padding: 8px 16px;
+  background: #3c2929;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.workspace-actions .primary,
+.hover-actions .primary {
+  background: var(--accent, #9bc5a6);
+  color: #16251b;
+}
 .timeline-task strong {
   font-weight: 500;
 }
@@ -1123,7 +1294,7 @@ dialog header .tip {
   padding: 4px;
 }
 .context-editor {
-  border-top: 1px solid #383838;
+  border-top: 1px solid var(--line, #383838);
   padding-top: 12px;
 }
 .context-editor textarea {
@@ -1132,7 +1303,7 @@ dialog header .tip {
 }
 .context-editor article {
   padding: 10px 0;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--hover, #333);
 }
 .assistant {
   width: 380px;
@@ -1174,4 +1345,130 @@ select {
 .app-shell .settings-view {
   font-size: var(--user-font-size, 14px);
 }
-.timeline-task{min-height:0}
+.timeline-task {
+  min-height: 0;
+}
+
+/* v2 workspace controls */
+.palette-carbon {
+  --surface: #141414;
+  --chrome: #101010;
+  --canvas: #181818;
+  --panel: #202020;
+  --input: #262626;
+  --hover: #303030;
+  --line: #333;
+  --line-strong: #484848;
+}
+.palette-stone {
+  --surface: #292826;
+  --chrome: #211f1d;
+  --canvas: #242321;
+  --panel: #302e2b;
+  --input: #36332f;
+  --hover: #403c37;
+  --line: #47423c;
+  --line-strong: #5a544c;
+}
+.accent-blue {
+  --accent: #91b9e8;
+}
+.accent-purple {
+  --accent: #bca7df;
+}
+.accent-amber {
+  --accent: #d7bc81;
+}
+.app-shell {
+  background: var(--surface, #212121);
+}
+.provider-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 20px;
+}
+.provider-actions > button {
+  border: 1px solid var(--line-strong, #444);
+}
+.provider-feedback {
+  min-height: 24px;
+  overflow-wrap: anywhere;
+}
+.appearance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+.label-manager {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.label-manager input {
+  width: 100%;
+}
+.label-manager > button {
+  justify-content: flex-start;
+}
+.label-manager > .primary {
+  justify-content: center;
+  margin: 8px 0;
+}
+.label-swatches {
+  display: flex;
+  gap: 10px;
+  border: 0;
+  padding: 8px 0;
+  margin: 0;
+}
+.label-swatches legend {
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.label-swatches .color-swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--task-color);
+  color: #171717;
+}
+.label-swatches [aria-pressed="true"] {
+  outline: 2px solid #ececec;
+  outline-offset: 3px;
+}
+.assistant.assistant-page {
+  width: 100%;
+  max-width: 960px;
+  min-width: 0;
+  align-self: center;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 28px 40px;
+  overflow-y: auto;
+}
+.assistant-page > label:first-of-type {
+  max-width: 220px;
+}
+.assistant-page > button {
+  margin: 8px 12px 8px 0;
+}
+.assistant-page > .primary {
+  width: auto;
+  min-width: 180px;
+  display: flex;
+}
+.assistant-page > details {
+  margin: 12px 0;
+}
+@media (max-width: 1000px) {
+  .assistant.assistant-page {
+    width: 100%;
+    padding: 24px;
+  }
+}

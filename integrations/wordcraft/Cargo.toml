@@ -1,0 +1,31 @@
+[package]
+name = "consilium-wordcraft"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wordcraft-engine = { git = "https://github.com/storytold/wordcraft", rev = "e6c5a701ddff5be16e266028168c70658aae39d9" }
+wordcraft-ui-egui = { git = "https://github.com/storytold/wordcraft", rev = "e6c5a701ddff5be16e266028168c70658aae39d9" }
+wordcraft-doc = { git = "https://github.com/storytold/wordcraft", rev = "e6c5a701ddff5be16e266028168c70658aae39d9" }
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu", "accesskit"] }
+egui = "0.36"
+serde_json = "1"
+wuff = "0.2.9"
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement"] }
+
+[patch.crates-io]
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "c3487320b2d1de657b860b3c8abb44e1f2b32bd8" }
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+

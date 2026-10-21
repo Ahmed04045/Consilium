@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 pub mod account;
+mod gemini;
 pub mod keys;
 pub fn cloud(provider: &str) -> bool {
     matches!(provider, "gemini" | "openrouter")
@@ -66,7 +67,11 @@ impl Provider {
         }
         let value: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
         let key = keys::selected(&self.settings.provider).ok();
-        let detail = provider_error_detail(&value, key.as_deref());
+        let detail = if matches!(status.as_u16(), 429 | 502 | 503 | 504) {
+            transient_error_detail(status.as_u16()).to_owned()
+        } else {
+            provider_error_detail(&value, key.as_deref())
+        };
         bail!(
             "{} HTTP {}: {}",
             self.settings.provider,
@@ -86,25 +91,45 @@ impl Provider {
         }
         self.fingerprint(&self.settings.chat_model).await?;
         let messages = json!([{"role":"system","content":system},{"role":"user","content":prompt}]);
-        let (path, body) = if self.settings.provider == "ollama" {
+        let native_gemini = self.settings.provider == "gemini";
+        let (path, body) = if native_gemini {
             (
-                "/api/chat",
+                gemini::path(&self.settings.chat_model, true)?,
+                gemini::body(system, prompt, 2048, None),
+            )
+        } else if self.settings.provider == "ollama" {
+            (
+                "/api/chat".to_owned(),
                 json!({"model":self.settings.chat_model,"messages":messages,"stream":true,"options":{"num_ctx":self.settings.context_tokens,"num_predict":2048}}),
             )
         } else {
             (
-                "/chat/completions",
+                "/chat/completions".to_owned(),
                 json!({"model":self.settings.chat_model,"messages":messages,"stream":true,"max_tokens":2048}),
             )
         };
-        let mut response = self
-            .authorize(self.client.post(self.url(path)))?
+        let response = self
+            .authorize(self.client.post(self.url(&path)))?
             .json(&body)
             .send()
-            .await?
-            .error_for_status()?;
+            .await?;
+        if !response.status().is_success() {
+            return self.checked_json(response).await.map(|_| String::new());
+        }
+        self.read_chat_stream(response, on_chunk).await
+    }
+    async fn read_chat_stream<F>(
+        &self,
+        mut response: reqwest::Response,
+        on_chunk: F,
+    ) -> Result<String>
+    where
+        F: Fn(&str) + Send + Sync,
+    {
+        let native_gemini = self.settings.provider == "gemini";
         let mut pending = Vec::new();
         let mut answer = String::new();
+        let mut gemini_finished = false;
         while let Some(bytes) = response.chunk().await? {
             pending.extend_from_slice(&bytes);
             if pending.len() > 1_000_000 {
@@ -133,6 +158,15 @@ impl Provider {
                 {
                     bail!("Response truncated. Shorten the question or increase output capacity.");
                 }
+                if native_gemini {
+                    let fragment = gemini::text(&value, true)?;
+                    gemini_finished |= value["candidates"][0]["finishReason"] == "STOP";
+                    answer.push_str(&fragment);
+                    if !fragment.is_empty() {
+                        on_chunk(&fragment);
+                    }
+                    continue;
+                }
                 let fragment = if self.settings.provider == "ollama" {
                     value["message"]["content"].as_str()
                 } else {
@@ -147,6 +181,9 @@ impl Provider {
         if !pending.iter().all(u8::is_ascii_whitespace) {
             bail!("Provider ended with an incomplete stream frame");
         }
+        if native_gemini && !gemini_finished {
+            bail!("Gemini stream ended before completion. Please retry.");
+        }
         if answer.trim().is_empty() {
             bail!("The local model returned no answer");
         }
@@ -154,7 +191,7 @@ impl Provider {
     }
     pub fn new(mut settings: Settings) -> Result<Self> {
         settings.endpoint = match settings.provider.as_str() {
-            "gemini" => "https://generativelanguage.googleapis.com/v1beta/openai".into(),
+            "gemini" => "https://generativelanguage.googleapis.com/v1beta".into(),
             "openrouter" => "https://openrouter.ai/api/v1".into(),
             _ => local_endpoint(&settings.endpoint)?,
         };
@@ -186,7 +223,7 @@ impl Provider {
     fn authorize(&self, request: reqwest::RequestBuilder) -> Result<reqwest::RequestBuilder> {
         if cloud(&self.settings.provider) {
             let key = keys::selected(&self.settings.provider)?;
-            Ok(request.bearer_auth(key))
+            Ok(authorize_cloud(request, &self.settings.provider, &key)?)
         } else {
             Ok(request)
         }
@@ -200,13 +237,11 @@ impl Provider {
         } else {
             "/models"
         };
-        Ok(self
+        let response = self
             .authorize(self.client.get(self.url(path)))?
             .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?)
+            .await?;
+        self.checked_json(response).await
     }
     pub async fn fingerprint(&self, model: &str) -> Result<Option<String>> {
         if self.settings.provider != "ollama" {
@@ -316,6 +351,22 @@ impl Provider {
             bail!("This request exceeds the conservative context budget. Shorten active context or increase the configured model window.");
         }
         self.fingerprint(&self.settings.chat_model).await?;
+        if self.settings.provider == "gemini" {
+            let path = gemini::path(&self.settings.chat_model, false)?;
+            let body = gemini::body(system, prompt, output_limit, schema);
+            let response = send_with_retry(
+                self.authorize(self.client.post(self.url(&path)))?
+                    .json(&body),
+                &[Duration::from_secs(1), Duration::from_secs(2)],
+            )
+            .await?;
+            let value = self.checked_json(response).await?;
+            let content = gemini::text(&value, false)?;
+            if content.trim().is_empty() {
+                bail!("Gemini returned no answer");
+            }
+            return Ok(content);
+        }
         let messages = json!([{"role":"system","content":system},{"role":"user","content":prompt}]);
         let (path, mut body) = if self.settings.provider == "ollama" {
             (
@@ -328,23 +379,13 @@ impl Provider {
                 json!({"model":self.settings.chat_model,"messages":messages,"stream":false,"temperature":0.2,"max_tokens":2048}),
             )
         };
-        if self.settings.provider == "ollama" {
-            body["options"]["num_predict"] = json!(output_limit);
-        } else {
-            body["max_tokens"] = json!(output_limit);
-        }
-        if let Some(schema) = schema {
-            if self.settings.provider == "ollama" {
-                body["format"] = schema.clone();
-            } else {
-                body["response_format"] = json!({"type":"json_schema","json_schema":{"name":"consilium_response","strict":true,"schema":schema}});
-            }
-        }
-        let response = self
-            .authorize(self.client.post(self.url(path)))?
-            .json(&body)
-            .send()
-            .await?;
+        configure_generation_body(&self.settings.provider, &mut body, output_limit, schema);
+        let response = send_with_retry(
+            self.authorize(self.client.post(self.url(path)))?
+                .json(&body),
+            &[Duration::from_secs(1), Duration::from_secs(2)],
+        )
+        .await?;
         let value = self.checked_json(response).await?;
         if value["choices"][0]["finish_reason"] == "length" || value["done_reason"] == "length" {
             bail!("Model output was truncated; try a smaller request");
@@ -358,9 +399,102 @@ impl Provider {
     }
 }
 
+fn authorize_cloud(
+    request: reqwest::RequestBuilder,
+    provider: &str,
+    key: &str,
+) -> Result<reqwest::RequestBuilder> {
+    if provider == "gemini" {
+        let mut value = reqwest::header::HeaderValue::from_str(key)
+            .context("Saved API key contains invalid header characters")?;
+        value.set_sensitive(true);
+        Ok(request.header("x-goog-api-key", value))
+    } else {
+        Ok(request.bearer_auth(key))
+    }
+}
+
+fn configure_generation_body(
+    provider: &str,
+    body: &mut Value,
+    output_limit: usize,
+    schema: Option<&Value>,
+) {
+    if provider == "ollama" {
+        body["options"]["num_predict"] = json!(output_limit);
+    } else {
+        body["max_tokens"] = json!(output_limit);
+    }
+    if let Some(schema) = schema {
+        if provider == "ollama" {
+            body["format"] = schema.clone();
+        } else {
+            body["response_format"] = json!({"type":"json_schema","json_schema":{"name":"consilium_response","strict":true,"schema":schema}});
+        }
+    }
+}
+
+// Retry only explicit transient HTTP failures before any response is applied.
+// Dropping this future (timeout/cancellation) also drops the retry delay.
+async fn send_with_retry(
+    request: reqwest::RequestBuilder,
+    delays: &[Duration],
+) -> Result<reqwest::Response> {
+    for attempt in 0..=delays.len() {
+        let response = request
+            .try_clone()
+            .context("Request cannot be retried")?
+            .send()
+            .await?;
+        let status = response.status().as_u16();
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<u64>().ok());
+        // A rate limit without a short Retry-After may be a daily quota: do not hammer it.
+        let transient = matches!(status, 502 | 503 | 504)
+            || (status == 429 && retry_after.is_some_and(|s| s <= 10));
+        if !transient || attempt == delays.len() || retry_after.is_some_and(|s| s > 10) {
+            return Ok(response);
+        }
+        let delay = retry_after
+            .map(Duration::from_secs)
+            .unwrap_or(delays[attempt]);
+        drop(response);
+        tokio::time::sleep(delay).await;
+    }
+    unreachable!()
+}
+fn transient_error_detail(status: u16) -> &'static str {
+    if status == 429 {
+        "Provider rate limit or quota reached. Wait before retrying, or check your provider quota."
+    } else {
+        "The provider is temporarily unavailable or overloaded. Please try again shortly. Your saved key has not been changed."
+    }
+}
+
 fn provider_error_detail(value: &Value, key: Option<&str>) -> String {
-    let mut message = value["error"]["message"].as_str()
-        .unwrap_or("Provider rejected the request. Check the saved model ID, API key and provider account.")
+    // Google's compatibility endpoint can wrap google.rpc.Status in an array.
+    // Read known diagnostic fields only; never expose a raw body/request dump.
+    fn error_message(value: &Value, depth: usize) -> Option<&str> {
+        if depth > 4 {
+            return None;
+        }
+        if let Some(items) = value.as_array() {
+            return items
+                .iter()
+                .take(4)
+                .find_map(|v| error_message(v, depth + 1));
+        }
+        value["error"]["message"]
+            .as_str()
+            .or_else(|| value["error"].as_str())
+            .or_else(|| value["message"].as_str())
+            .filter(|s| !s.trim().is_empty())
+    }
+    let mut message = error_message(value, 0)
+        .unwrap_or("Provider rejected the request without a readable error message. Check the selected model's supported request parameters in the provider console.")
         .to_owned();
     if let Some(key) = key.filter(|k| !k.is_empty()) {
         message = message.replace(key, "[redacted]");
@@ -497,6 +631,100 @@ mod tests {
 #[cfg(test)]
 mod cloud_tests {
     use super::*;
+    #[tokio::test]
+    async fn native_stream_requires_completion_and_never_emits_thought_parts() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let fragment = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hidden\",\"thought\":true},{\"text\":\"Hello\"}]}}]}\n\n";
+        for (ending, succeeds) in [
+            (
+                "data: {\"candidates\":[{\"finishReason\":\"STOP\"}]}\n\n",
+                true,
+            ),
+            ("", false),
+            (
+                "data: {\"candidates\":[{\"finishReason\":\"MAX_TOKENS\"}]}\n\n",
+                false,
+            ),
+            ("data: {\"candidates\":", false),
+        ] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}", listener.local_addr().unwrap());
+            let body = format!("{fragment}{ending}");
+            let server = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = [0; 4096];
+                socket.read(&mut buffer).await.unwrap();
+                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+            });
+            let provider = Provider::new(Settings {
+                provider: "gemini".into(),
+                ..Settings::default()
+            })
+            .unwrap();
+            let response = provider.client.get(url).send().await.unwrap();
+            let chunks = std::sync::Mutex::new(String::new());
+            let result = provider
+                .read_chat_stream(response, |chunk| chunks.lock().unwrap().push_str(chunk))
+                .await;
+            assert_eq!(result.is_ok(), succeeds);
+            assert_eq!(*chunks.lock().unwrap(), "Hello");
+            if succeeds {
+                assert_eq!(result.unwrap(), "Hello");
+            }
+            server.await.unwrap();
+        }
+    }
+    async fn mock_statuses(statuses: Vec<u16>) -> (String, tokio::task::JoinHandle<usize>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let count = statuses.len();
+            for status in statuses {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = [0; 4096];
+                socket.read(&mut buffer).await.unwrap();
+                socket.write_all(format!("HTTP/1.1 {status} Test\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").as_bytes()).await.unwrap();
+            }
+            count
+        });
+        (url, server)
+    }
+    #[tokio::test]
+    async fn transient_retries_recover_and_stop_after_three_attempts() {
+        for statuses in [
+            vec![503, 200],
+            vec![503, 503, 503],
+            vec![401],
+            vec![400],
+            vec![429],
+        ] {
+            let expected = *statuses.last().unwrap();
+            let count = statuses.len();
+            let (url, server) = mock_statuses(statuses).await;
+            let response = send_with_retry(
+                reqwest::Client::new().get(url),
+                &[Duration::ZERO, Duration::ZERO],
+            )
+            .await
+            .unwrap();
+            assert_eq!(response.status().as_u16(), expected);
+            assert_eq!(server.await.unwrap(), count);
+        }
+        assert!(transient_error_detail(503).contains("temporarily unavailable"));
+        assert!(!transient_error_detail(503).contains("Check the saved model ID"));
+    }
+    #[tokio::test]
+    async fn cancellation_stops_retry_wait() {
+        let (url, server) = mock_statuses(vec![503]).await;
+        let result = tokio::time::timeout(
+            Duration::from_millis(100),
+            send_with_retry(reqwest::Client::new().get(url), &[Duration::from_secs(10)]),
+        )
+        .await;
+        assert!(result.is_err());
+        assert_eq!(server.await.unwrap(), 1);
+    }
     #[test]
     fn provider_errors_are_bounded_and_redact_credentials() {
         let value =
@@ -508,15 +736,49 @@ mod cloud_tests {
             provider_error_detail(&json!({"error":{"message":"x".repeat(1000)}}), None).len(),
             800
         );
-        assert!(provider_error_detail(&Value::Null, None).contains("saved model ID"));
+        assert!(provider_error_detail(&Value::Null, None).contains("without a readable error"));
+    }
+    #[test]
+    fn google_array_errors_preserve_the_rejection_and_redact_keys() {
+        let value = json!([{"error":{"code":400,"message":"Invalid response_format for test-secret","status":"INVALID_ARGUMENT"},"request":"private context"}]);
+        assert_eq!(
+            provider_error_detail(&value, Some("test-secret")),
+            "Invalid response_format for [redacted]"
+        );
+        assert_eq!(
+            provider_error_detail(&json!({"message":"Invalid max_tokens"}), None),
+            "Invalid max_tokens"
+        );
+        assert_eq!(
+            provider_error_detail(&json!({"error":"Unsupported model"}), None),
+            "Unsupported model"
+        );
+    }
+    #[test]
+    fn other_providers_keep_their_structured_output_contracts() {
+        let schema: Value =
+            serde_json::from_str(include_str!("../../../schemas/calendar-tasks.schema.json"))
+                .unwrap();
+        for provider in ["openrouter", "openai"] {
+            let mut body =
+                json!({"model":"gemini-3.8-flash","temperature":0.2,"top_p":0.9,"top_k":20});
+            configure_generation_body(provider, &mut body, 4096, Some(&schema));
+            assert_eq!(body["temperature"], 0.2);
+            assert_eq!(body["top_p"], 0.9);
+            assert_eq!(body["top_k"], 20);
+            assert_eq!(body["max_tokens"], 4096);
+            assert_eq!(body["response_format"]["json_schema"]["schema"], schema);
+            assert_eq!(body["response_format"]["json_schema"]["strict"], true);
+        }
+        let mut local = json!({"options":{"temperature":0.2}});
+        configure_generation_body("ollama", &mut local, 2048, Some(&schema));
+        assert_eq!(local["options"]["temperature"], 0.2);
+        assert_eq!(local["format"], schema);
     }
     #[test]
     fn cloud_endpoints_cannot_be_overridden() {
         for (name, host) in [
-            (
-                "gemini",
-                "https://generativelanguage.googleapis.com/v1beta/openai",
-            ),
+            ("gemini", "https://generativelanguage.googleapis.com/v1beta"),
             ("openrouter", "https://openrouter.ai/api/v1"),
         ] {
             let p = Provider::new(Settings {
@@ -527,6 +789,30 @@ mod cloud_tests {
             .unwrap();
             assert_eq!(p.settings.endpoint, host);
         }
+    }
+    #[test]
+    fn native_gemini_uses_a_sensitive_key_header_without_url_credentials() {
+        let client = reqwest::Client::new();
+        let url = "https://generativelanguage.googleapis.com/v1beta/models/test:generateContent";
+        let request = authorize_cloud(client.post(url), "gemini", "synthetic-key")
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(request.headers()["x-goog-api-key"], "synthetic-key");
+        assert!(request.headers()["x-goog-api-key"].is_sensitive());
+        assert!(request.headers().get("authorization").is_none());
+        assert!(request.url().query().is_none());
+        assert!(!format!("{request:?}").contains("synthetic-key"));
+        let request = authorize_cloud(
+            client.post("https://openrouter.ai/api/v1/chat/completions"),
+            "openrouter",
+            "synthetic-key",
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+        assert_eq!(request.headers()["authorization"], "Bearer synthetic-key");
+        assert!(request.headers().get("x-goog-api-key").is_none());
     }
     #[tokio::test]
     async fn no_cloud_embedding_uploads() {

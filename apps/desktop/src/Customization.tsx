@@ -5,13 +5,38 @@ export const appearanceDefaults = {
   defaultView: "Month",
   weekStart: "sunday",
   showCompleted: true,
+  rowHeight: 90,
+  rowGap: 0,
+  columnGap: 0,
+  hourHeight: 60,
+  palette: "graphite",
+  accent: "green",
 };
 export function readAppearance() {
   try {
-    return {
+    const saved = JSON.parse(
+      localStorage.getItem("consilium-appearance") || "{}",
+    );
+    const p = {
       ...appearanceDefaults,
-      ...JSON.parse(localStorage.getItem("consilium-appearance") || "{}"),
+      ...saved,
     };
+    for (const [key, min, max] of [
+      ["fontSize", 12, 18],
+      ["rowHeight", 90, 260],
+      ["rowGap", 0, 16],
+      ["columnGap", 0, 16],
+      ["hourHeight", 40, 120],
+    ] as const) {
+      p[key] = Number.isFinite(p[key])
+        ? Math.min(max, Math.max(min, p[key]))
+        : appearanceDefaults[key];
+    }
+    if (!["graphite", "carbon", "stone"].includes(p.palette))
+      p.palette = "graphite";
+    if (!["green", "blue", "purple", "amber"].includes(p.accent))
+      p.accent = "green";
+    return p;
   } catch {
     return appearanceDefaults;
   }
@@ -26,6 +51,51 @@ export function Customization() {
   return (
     <section>
       <h2>Appearance & calendar</h2>
+      <div className="appearance-grid">
+        <label>
+          App palette
+          <select
+            value={p.palette}
+            onChange={(e) => update({ ...p, palette: e.target.value })}
+          >
+            <option value="graphite">Graphite</option>
+            <option value="carbon">Carbon</option>
+            <option value="stone">Stone</option>
+          </select>
+        </label>
+        <label>
+          Action accent
+          <select
+            value={p.accent}
+            onChange={(e) => update({ ...p, accent: e.target.value })}
+          >
+            <option value="green">Green</option>
+            <option value="blue">Blue</option>
+            <option value="purple">Purple</option>
+            <option value="amber">Amber</option>
+          </select>
+        </label>
+        {(
+          [
+            ["rowHeight", "Minimum month row height", 90, 260],
+            ["rowGap", "Space between calendar rows", 0, 16],
+            ["columnGap", "Space between calendar columns", 0, 16],
+            ["hourHeight", "Height of one hour", 40, 120],
+          ] as const
+        ).map(([key, label, min, max]) => (
+          <label key={key}>
+            {label}
+            <input
+              type="range"
+              min={min}
+              max={max}
+              value={p[key]}
+              onChange={(e) => update({ ...p, [key]: Number(e.target.value) })}
+            />
+            <span className="small muted">{p[key]}px</span>
+          </label>
+        ))}
+      </div>
       <label>
         Density
         <select

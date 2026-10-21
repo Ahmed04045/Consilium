@@ -33,13 +33,16 @@ import {
 } from "./calendar";
 import type { RecordValue } from "./types";
 import { ContextPanel } from "./ContextPanel";
+import { TaskWorkspace } from "./TaskWorkspace";
+import { TaskButton } from "./TaskButton";
 import { Timeline } from "./Timeline";
 import { readAppearance } from "./Customization";
 import { SettingsView } from "./SettingsView";
 import fontLicense from "./google-sans-LICENSE.txt?raw";
 
 type Location = {
-  page: "calendar" | "settings" | "search";
+  page: "calendar" | "settings" | "search" | "assistant" | "task";
+  taskId?: string;
   calendarId: string;
   date: string;
 };
@@ -126,8 +129,10 @@ export default function App() {
   ]);
   const [position, setPosition] = useState(0);
   const loc = history[position];
+  const [taskTabs, setTaskTabs] = useState<string[]>([]);
+  const dirtyTasks = useRef(new Set<string>());
+  const openedTasks = useRef(new Map<string, Task>());
   const [sidebar, setSidebar] = useState(true);
-  const [assistant, setAssistant] = useState(false);
   const [menu, setMenu] = useState("");
   const [appearance, setAppearance] = useState(readAppearance);
   const [view, setView] = useState(readAppearance().defaultView);
@@ -137,6 +142,7 @@ export default function App() {
     return () => window.removeEventListener("consilium-appearance", update);
   }, []);
   const [labelFilter, setLabelFilter] = useState<string[]>([]);
+  const [labelsOpen, setLabelsOpen] = useState(false);
   const [labelName, setLabelName] = useState("");
   const [labelColor, setLabelColor] = useState("green");
   const [titleQuery, setTitleQuery] = useState("");
@@ -145,7 +151,9 @@ export default function App() {
   const [repeatCount, setRepeatCount] = useState(7);
 
   const [edit, setEdit] = useState<Task | null>(null);
-  useEffect(() => { setRepeat("none"); }, [edit?.id]);
+  useEffect(() => {
+    setRepeat("none");
+  }, [edit?.id]);
   const [createCalendar, setCreateCalendar] = useState(false);
   const [calendarName, setCalendarName] = useState("");
   const [openedPages, setOpenedPages] = useState<string[]>(["search"]);
@@ -203,6 +211,35 @@ export default function App() {
     setPosition(position + 1);
     setMenu("");
   };
+  function openTask(task: Task, calendarId = calendar?.id || loc.calendarId) {
+    openedTasks.current.set(task.id, task);
+    setTaskTabs((t) => (t.includes(task.id) ? t : [...t, task.id]));
+    navigate({ page: "task", taskId: task.id, calendarId, date: task.date });
+  }
+  async function toggleTask(task: Task) {
+    const current = latest.current;
+    if (!current || busy) return;
+    await save({
+      ...current.workspace.value,
+      calendars: current.workspace.value.calendars.map((c) => ({
+        ...c,
+        tasks: c.tasks.map((t) =>
+          t.id === task.id ? { ...t, completed: !t.completed } : t,
+        ),
+      })),
+    });
+  }
+  function closeTask(id: string) {
+    if (dirtyTasks.current.has(id)) {
+      setError(
+        "This document has unsaved changes. Wait for Saved locally, or export and reload it before closing the tab.",
+      );
+      return;
+    }
+    setTaskTabs((t) => t.filter((v) => v !== id));
+    openedTasks.current.delete(id);
+    if (loc.taskId === id) navigate({ page: "calendar" });
+  }
   async function refresh() {
     const result = await rpc<CalendarSnapshot>("calendar_snapshot");
     setData(result);
@@ -262,6 +299,10 @@ export default function App() {
   }
   async function saveTask(remove = false) {
     if (!data || !calendar || !edit) return;
+    if (remove && dirtyTasks.current.has(edit.id)) {
+      setError("Save or export the task document before deleting this task.");
+      return;
+    }
     const tasks = calendar.tasks.filter((t) => t.id !== edit.id);
     if (!remove) {
       tasks.push(edit);
@@ -457,7 +498,7 @@ export default function App() {
     { name: "New calendar tab", run: () => setCreateCalendar(true) },
     { name: "Calendar", run: () => navigate({ page: "calendar" }) },
     { name: "Settings", run: () => navigate({ page: "settings" }) },
-    { name: "Assistant", run: () => setAssistant(true) },
+    { name: "Assistant", run: () => navigate({ page: "assistant" }) },
     { name: "Export calendar", run: () => void exportCalendar() },
   ];
   if (!data)
@@ -514,10 +555,14 @@ export default function App() {
   const taskExists = !!calendar?.tasks.some((t) => t.id === edit?.id);
   return (
     <div
-      className={`app-shell density-${appearance.density}`}
+      className={`app-shell density-${appearance.density} palette-${appearance.palette} accent-${appearance.accent}`}
       style={
         {
           "--user-font-size": `${appearance.fontSize}px`,
+          "--month-row-height": `${appearance.rowHeight}px`,
+          "--calendar-row-gap": `${appearance.rowGap}px`,
+          "--calendar-column-gap": `${appearance.columnGap}px`,
+          "--hour-height": `${appearance.hourHeight}px`,
         } as React.CSSProperties
       }
     >
@@ -675,11 +720,11 @@ export default function App() {
                       <button
                         role="menuitem"
                         onClick={() => {
-                          setAssistant(!assistant);
+                          navigate({ page: "assistant" });
                           setMenu("");
                         }}
                       >
-                        {assistant ? "Hide" : "Show"} assistant
+                        Open assistant
                       </button>
                       <hr />
                       {["Month", "Week", "Day"].map((v) => (
@@ -769,7 +814,7 @@ export default function App() {
                           calendarId: c.id,
                           date: t.date,
                         });
-                        setEdit({ ...t });
+                        openTask(t, c.id);
                         setTitleQuery("");
                       }}
                     >
@@ -837,7 +882,7 @@ export default function App() {
             </IconButton>
             <IconButton
               label="Assistant"
-              onClick={() => setAssistant(!assistant)}
+              onClick={() => navigate({ page: "assistant" })}
             >
               <MessageSquare size={20} />
             </IconButton>
@@ -867,6 +912,39 @@ export default function App() {
                 {c.name}
               </button>
             ))}
+            {taskTabs.map((id) => {
+              const task = data.workspace.value.calendars
+                .flatMap((c) => c.tasks)
+                .find((t) => t.id === id);
+              return (
+                <div className="task-tab" key={id}>
+                  <button
+                    role="tab"
+                    aria-selected={loc.page === "task" && loc.taskId === id}
+                    onClick={() => {
+                      if (task)
+                        openTask(
+                          task,
+                          data.workspace.value.calendars.find((c) =>
+                            c.tasks.some((t) => t.id === id),
+                          )!.id,
+                        );
+                      else navigate({ page: "task", taskId: id });
+                    }}
+                  >
+                    {task?.title ||
+                      openedTasks.current.get(id)?.title ||
+                      "Deleted task"}
+                  </button>
+                  <button
+                    aria-label={"Close task tab " + (task?.title || id)}
+                    onClick={() => closeTask(id)}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              );
+            })}
             {openedPages.includes("settings") && (
               <button
                 role="tab"
@@ -885,6 +963,16 @@ export default function App() {
               >
                 <Search size={15} />
                 Search
+              </button>
+            )}
+            {openedPages.includes("assistant") && (
+              <button
+                role="tab"
+                aria-selected={loc.page === "assistant"}
+                onClick={() => navigate({ page: "assistant" })}
+              >
+                <MessageSquare size={15} />
+                Assistant
               </button>
             )}
             <IconButton
@@ -979,56 +1067,9 @@ export default function App() {
                     {l.name}
                   </button>
                 ))}
-                <details>
-                  <summary>Manage labels</summary>
-                  <div className="label-manager">
-                    <input
-                      aria-label="Label name"
-                      maxLength={80}
-                      placeholder="New label"
-                      value={labelName}
-                      onChange={(e) => setLabelName(e.target.value)}
-                    />
-                    <select
-                      aria-label="Label color"
-                      value={labelColor}
-                      onChange={(e) => setLabelColor(e.target.value)}
-                    >
-                      {colors.map((c) => (
-                        <option key={c}>{c}</option>
-                      ))}
-                    </select>
-                    <button
-                      disabled={!labelName.trim() || busy}
-                      onClick={() =>
-                        void save({
-                          ...data.workspace.value,
-                          labels: [
-                            ...(data.workspace.value.labels ?? []).filter(
-                              (l) => l.name !== labelName.trim(),
-                            ),
-                            { name: labelName.trim(), color: labelColor },
-                          ],
-                        }).then((ok) => {
-                          if (ok) setLabelName("");
-                        })
-                      }
-                    >
-                      Save label
-                    </button>
-                    {(data.workspace.value.labels ?? []).map((l) => (
-                      <button
-                        key={l.name}
-                        onClick={() => {
-                          setLabelName(l.name);
-                          setLabelColor(l.color);
-                        }}
-                      >
-                        Edit {l.name}
-                      </button>
-                    ))}
-                  </div>
-                </details>
+                <button onClick={() => setLabelsOpen(true)}>
+                  Manage labels
+                </button>
                 <button
                   onClick={() => {
                     setLabelFilter([]);
@@ -1058,13 +1099,16 @@ export default function App() {
               </div>
               {view !== "Month" ? (
                 <Timeline
+                  hourHeight={appearance.hourHeight}
                   days={days}
                   tasks={(calendar?.tasks ?? []).filter(
                     (t) =>
                       !labelFilter.includes(t.label || "") &&
                       (appearance.showCompleted || !t.completed),
                   )}
-                  onEdit={setEdit}
+                  onEdit={openTask}
+                  onComplete={(t) => void toggleTask(t)}
+                  busy={busy}
                   onCreate={setEdit}
                   color={(t) =>
                     data.workspace.value.labels?.find((l) => l.name === t.label)
@@ -1124,10 +1168,13 @@ export default function App() {
                             )
                             .sort((a, b) => a.time.localeCompare(b.time))
                             .map((t) => (
-                              <button
+                              <TaskButton
                                 className={`calendar-task color-${data.workspace.value.labels?.find((l) => l.name === t.label)?.color ?? t.color} ${t.completed ? "completed" : ""}`}
                                 key={t.id}
-                                onClick={() => setEdit({ ...t })}
+                                task={t}
+                                disabled={busy}
+                                onOpen={() => openTask(t)}
+                                onComplete={() => void toggleTask(t)}
                               >
                                 <span className="task-dot" />
                                 {t.time && (
@@ -1142,7 +1189,7 @@ export default function App() {
                                   )}
                                 </span>
                                 {t.completed && <Check size={12} />}
-                              </button>
+                              </TaskButton>
                             ))}
                         </div>
                         <button
@@ -1159,6 +1206,44 @@ export default function App() {
               )}
             </main>
           ) : null}
+          {taskTabs.map((id) => {
+            const currentTask = data.workspace.value.calendars
+              .flatMap((c) => c.tasks)
+              .find((t) => t.id === id);
+            if (currentTask) openedTasks.current.set(id, currentTask);
+            const task = currentTask || openedTasks.current.get(id);
+            return (
+              <div
+                key={id}
+                className="page-container"
+                hidden={loc.page !== "task" || loc.taskId !== id}
+              >
+                {!currentTask && (
+                  <p role="alert">
+                    This task was removed. Export any unsaved document before
+                    closing.
+                  </p>
+                )}
+                {task ? (
+                  <TaskWorkspace
+                    task={task}
+                    settings={data.settings}
+                    onEdit={() => setEdit({ ...task })}
+                    onComplete={() => void toggleTask(task)}
+                    onDirty={(dirty) => {
+                      if (dirty) dirtyTasks.current.add(id);
+                      else dirtyTasks.current.delete(id);
+                    }}
+                  />
+                ) : (
+                  <main className="settings-view">
+                    <h1>Task removed</h1>
+                    <p>Its document and conversation are retained locally.</p>
+                  </main>
+                )}
+              </div>
+            );
+          })}
           {openedPages.includes("settings") && (
             <div className="page-container" hidden={loc.page !== "settings"}>
               <SettingsView data={data} refresh={refresh} onError={setError} />
@@ -1204,7 +1289,7 @@ export default function App() {
                             calendarId: c.id,
                             date: t.date,
                           });
-                          setEdit({ ...t });
+                          openTask(t, c.id);
                         }}
                       >
                         {t.title}
@@ -1215,136 +1300,201 @@ export default function App() {
               </div>
             </main>
           )}
-        </div>
-        {assistant && (
-          <aside className="assistant">
-            <header>
-              <h2>Assistant</h2>
-              <IconButton
-                label="Close assistant"
-                onClick={() => setAssistant(false)}
-              >
-                <X size={17} />
-              </IconButton>
-            </header>
-            <p className="muted">
-              Describe what you want to make time for. Review suggestions before
-              adding them.
-            </p>
-            <label>
-              Starting date
-              <input
-                type="date"
-                value={loc.date}
-                onChange={(e) => {
-                  if (e.target.value) navigate({ date: e.target.value });
-                }}
-              />
-            </label>
-            <label>
-              Schedule request
-              <textarea
-                value={request}
-                onChange={(e) => setRequest(e.target.value)}
-                placeholder="Plan 2 hours of learning tomorrow…"
-                rows={5}
-                maxLength={4000}
-              />
-            </label>
-            <button onClick={() => setContextOpen(!contextOpen)}>
-              {contextOpen ? "Hide context" : "Context & history"}
-            </button>
-            {contextOpen && <ContextPanel />}
-            <p className="small muted">
-              {cloud
-                ? "Sending shares your request, saved context and relevant tasks with " +
-                  data.settings.value.provider +
-                  "."
-                : "Uses your saved context and relevant tasks locally."}{" "}
-              Describe dates, hours and budget naturally. Up to 31 days and 64
-              tasks per proposal.
-            </p>
-            <button
-              onClick={() =>
-                void rpc<{
-                  context: { personal_revision: number };
-                  revision: number;
-                  provider: string;
-                  settings_revision: number;
-                }>("calendar_context", {
-                  calendar_id: calendar?.id,
-                  date: loc.date,
-                  days: horizonDays,
-                  daily_budget: dailyBudget,
-                })
-                  .then(setPacket)
-                  .catch((e) => setError(String(e)))
-              }
+          {openedPages.includes("assistant") && (
+            <main
+              className="assistant assistant-page"
+              hidden={loc.page !== "assistant"}
             >
-              Preview AI context
-            </button>
-            {packet && (
-              <details>
-                <summary>Context for {horizonDays} days</summary>
-                <pre className="context-preview">
-                  {JSON.stringify(packet.context, null, 2)}
-                </pre>
-              </details>
-            )}
+              <header>
+                <h2>Assistant</h2>
+                <IconButton
+                  label="Close assistant"
+                  onClick={() => navigate({ page: "calendar" })}
+                >
+                  <X size={17} />
+                </IconButton>
+              </header>
+              <p className="muted">
+                Describe what you want to make time for. Review suggestions
+                before adding them.
+              </p>
+              <label>
+                Starting date
+                <input
+                  type="date"
+                  value={loc.date}
+                  onChange={(e) => {
+                    if (e.target.value) navigate({ date: e.target.value });
+                  }}
+                />
+              </label>
+              <label>
+                Schedule request
+                <textarea
+                  value={request}
+                  onChange={(e) => setRequest(e.target.value)}
+                  placeholder="Plan 2 hours of learning tomorrow…"
+                  rows={5}
+                  maxLength={4000}
+                />
+              </label>
+              <button onClick={() => setContextOpen(!contextOpen)}>
+                {contextOpen ? "Hide context" : "Context & history"}
+              </button>
+              {contextOpen && <ContextPanel />}
+              <p className="small muted">
+                {cloud
+                  ? "Sending shares your request, saved context and relevant tasks with " +
+                    data.settings.value.provider +
+                    "."
+                  : "Uses your saved context and relevant tasks locally."}{" "}
+                Describe dates, hours and budget naturally. Up to 31 days and 64
+                tasks per proposal.
+              </p>
+              <button
+                onClick={() =>
+                  void rpc<{
+                    context: { personal_revision: number };
+                    revision: number;
+                    provider: string;
+                    settings_revision: number;
+                  }>("calendar_context", {
+                    calendar_id: calendar?.id,
+                    date: loc.date,
+                    days: horizonDays,
+                    daily_budget: dailyBudget,
+                  })
+                    .then(setPacket)
+                    .catch((e) => setError(String(e)))
+                }
+              >
+                Preview AI context
+              </button>
+              {packet && (
+                <details>
+                  <summary>Context for {horizonDays} days</summary>
+                  <pre className="context-preview">
+                    {JSON.stringify(packet.context, null, 2)}
+                  </pre>
+                </details>
+              )}
+              <button
+                className="primary"
+                disabled={generating || !request.trim()}
+                onClick={() => void propose()}
+              >
+                {generating
+                  ? "Thinking…"
+                  : cloud
+                    ? `Send to ${data.settings.value.provider}`
+                    : "Suggest tasks"}
+              </button>
+              {generating && (
+                <button onClick={() => void cancel(requestId.current)}>
+                  Cancel
+                </button>
+              )}
+              {!data.settings.value.chat_model && (
+                <button
+                  className="text-button"
+                  onClick={() => navigate({ page: "settings" })}
+                >
+                  Set up an AI provider
+                </button>
+              )}
+              {suggestion && (
+                <div className="suggestions">
+                  <h3>Suggested tasks</h3>
+                  <p>
+                    {suggestion.tasks.length} tasks across{" "}
+                    {new Set(suggestion.tasks.map((t) => t.date)).size} days.
+                    Review coverage before adding.
+                  </p>
+                  {suggestion.tasks.map((t) => (
+                    <article key={t.id}>
+                      <strong>{t.title}</strong>
+                      <p>
+                        {t.date} · {t.time || "All day"} · {t.minutes} min
+                      </p>
+                      <p>{t.description}</p>
+                    </article>
+                  ))}
+                  <button
+                    className="primary"
+                    disabled={busy}
+                    onClick={() => void accept()}
+                  >
+                    Add to calendar
+                  </button>
+                  <button onClick={() => setSuggestion(null)}>Discard</button>
+                </div>
+              )}
+            </main>
+          )}
+        </div>
+      </div>
+      {labelsOpen && (
+        <Modal title="Manage labels" onClose={() => setLabelsOpen(false)}>
+          <p className="small muted">
+            Choose a name and color. Select an existing label below to change
+            its color.
+          </p>
+          <div className="label-manager">
+            <input
+              aria-label="Label name"
+              maxLength={80}
+              placeholder="Label name"
+              value={labelName}
+              onChange={(e) => setLabelName(e.target.value)}
+            />
+            <fieldset className="label-swatches">
+              <legend>Color</legend>
+              {colors.map((c) => (
+                <button
+                  type="button"
+                  key={c}
+                  className={"color-swatch color-" + c}
+                  aria-label={c + " label color"}
+                  aria-pressed={labelColor === c}
+                  onClick={() => setLabelColor(c)}
+                >
+                  {labelColor === c && <Check size={16} />}
+                </button>
+              ))}
+            </fieldset>
             <button
               className="primary"
-              disabled={generating || !request.trim()}
-              onClick={() => void propose()}
+              disabled={!labelName.trim() || busy}
+              onClick={() =>
+                void save({
+                  ...data.workspace.value,
+                  labels: [
+                    ...(data.workspace.value.labels ?? []).filter(
+                      (l) => l.name !== labelName.trim(),
+                    ),
+                    { name: labelName.trim(), color: labelColor },
+                  ],
+                }).then((ok) => {
+                  if (ok) setLabelName("");
+                })
+              }
             >
-              {generating
-                ? "Thinking…"
-                : cloud
-                  ? `Send to ${data.settings.value.provider}`
-                  : "Suggest tasks"}
+              Save label
             </button>
-            {generating && (
-              <button onClick={() => void cancel(requestId.current)}>
-                Cancel
-              </button>
-            )}
-            {!data.settings.value.chat_model && (
+            {(data.workspace.value.labels ?? []).map((l) => (
               <button
-                className="text-button"
-                onClick={() => navigate({ page: "settings" })}
+                key={l.name}
+                onClick={() => {
+                  setLabelName(l.name);
+                  setLabelColor(l.color);
+                }}
               >
-                Set up an AI provider
+                Edit {l.name}
               </button>
-            )}
-            {suggestion && (
-              <div className="suggestions">
-                <h3>Suggested tasks</h3>
-                <p>
-                  {suggestion.tasks.length} tasks across{" "}
-                  {new Set(suggestion.tasks.map((t) => t.date)).size} days.
-                  Review coverage before adding.
-                </p>
-                {suggestion.tasks.map((t) => (
-                  <article key={t.id}>
-                    <strong>{t.title}</strong>
-                    <p>
-                      {t.date} · {t.time || "All day"} · {t.minutes} min
-                    </p>
-                    <p>{t.description}</p>
-                  </article>
-                ))}
-                <button
-                  className="primary"
-                  disabled={busy}
-                  onClick={() => void accept()}
-                >
-                  Add to calendar
-                </button>
-                <button onClick={() => setSuggestion(null)}>Discard</button>
-              </div>
-            )}
-          </aside>
-        )}
-      </div>
+            ))}
+          </div>
+        </Modal>
+      )}
       {onboarding && (
         <div className="onboarding">
           <div className="onboarding-card">
@@ -1459,7 +1609,8 @@ export default function App() {
                     const [h, m] = edit.time.split(":").map(Number);
                     const [eh, em] = e.target.value.split(":").map(Number);
                     const end = eh * 60 + em;
-                    const duration = (end === 0 && h * 60 + m > 0 ? 1440 : end) - h * 60 - m;
+                    const duration =
+                      (end === 0 && h * 60 + m > 0 ? 1440 : end) - h * 60 - m;
                     if (duration > 0) setEdit({ ...edit, minutes: duration });
                   }}
                 />
@@ -1663,4 +1814,3 @@ export default function App() {
     </div>
   );
 }
-
