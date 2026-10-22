@@ -1,0 +1,14 @@
+[package]
+name = "consilium-cli"
+version = "3.0.0-alpha.1"
+edition = "2021"
+[[bin]]
+name = "consilium"
+path = "src/main.rs"
+[dependencies]
+consilium-application.workspace = true
+consilium-workflow.workspace = true
+consilium-storage.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+anyhow.workspace = true

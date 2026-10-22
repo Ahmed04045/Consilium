@@ -33,7 +33,7 @@ impl WindowsBackend<'_> {
             "legacy" => format!("model-{}", self.0),
             _ => format!("named-secret-{}-{name}", self.0),
         };
-        Ok(keyring::Entry::new("Consilium", &account)?)
+        Ok(keyring::Entry::new("ConsiliumNext", &account)?)
     }
 }
 impl Backend for WindowsBackend<'_> {
@@ -147,6 +147,19 @@ pub fn selected(provider: &str) -> Result<String> {
         .find(|k| k.id == r.selected)
         .map(|k| k.secret)
         .context("Choose a saved API key in Settings")
+}
+/// Resolve an explicit profile credential without changing the selected key.
+pub fn by_id(provider: &str, id: &str) -> Result<String> {
+    validate_provider(provider)?;
+    let _guard = LOCK
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Key store unavailable"))?;
+    load(&WindowsBackend(provider))?
+        .keys
+        .into_iter()
+        .find(|k| k.id == id)
+        .map(|k| k.secret)
+        .context("This profile's saved key is missing; choose a key in Settings")
 }
 pub fn manage(provider: &str, action: &str, payload: &Value) -> Result<Value> {
     validate_provider(provider)?;

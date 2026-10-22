@@ -13,5 +13,10 @@ chrono.workspace = true
 tokio.workspace = true
 jsonschema = "0.29"
 chrono-tz = "0.10"
+consilium-workflow.workspace = true
+async-trait = "0.1"
+tempfile = "3"
+wordcraft-doc = { git = "https://github.com/storytold/wordcraft", rev = "e6c5a701ddff5be16e266028168c70658aae39d9" }
+wordcraft-docx = { git = "https://github.com/storytold/wordcraft", rev = "e6c5a701ddff5be16e266028168c70658aae39d9" }
 [dev-dependencies]
 tempfile = "3"

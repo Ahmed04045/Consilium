@@ -9,7 +9,7 @@ pub fn set_model_key(provider: &str, key: &str) -> Result<()> {
     if !cloud(provider) {
         bail!("Choose a cloud provider");
     }
-    let entry = keyring::Entry::new("Consilium", &format!("model-{provider}"))?;
+    let entry = keyring::Entry::new("ConsiliumNext", &format!("model-{provider}"))?;
     if key.is_empty() {
         let _ = entry.delete_credential();
     } else {
@@ -18,7 +18,7 @@ pub fn set_model_key(provider: &str, key: &str) -> Result<()> {
     Ok(())
 }
 pub fn has_model_key(provider: &str) -> bool {
-    keyring::Entry::new("Consilium", &format!("model-{provider}"))
+    keyring::Entry::new("ConsiliumNext", &format!("model-{provider}"))
         .ok()
         .and_then(|e| e.get_password().ok())
         .is_some()
@@ -32,6 +32,8 @@ use url::Url;
 pub struct Provider {
     pub settings: Settings,
     client: reqwest::Client,
+    credential_id: Option<String>,
+    request_guard: Option<std::sync::Arc<dyn Fn() -> Result<()> + Send + Sync>>,
 }
 pub fn local_endpoint(input: &str) -> Result<String> {
     let url = Url::parse(input)?;
@@ -52,6 +54,13 @@ pub fn local_endpoint(input: &str) -> Result<String> {
     Ok(input.trim_end_matches('/').to_string())
 }
 impl Provider {
+    pub fn with_request_guard(
+        mut self,
+        guard: std::sync::Arc<dyn Fn() -> Result<()> + Send + Sync>,
+    ) -> Self {
+        self.request_guard = Some(guard);
+        self
+    }
     async fn checked_json(&self, mut response: reqwest::Response) -> Result<Value> {
         let status = response.status();
         if status.is_success() {
@@ -66,7 +75,7 @@ impl Provider {
             bytes.extend_from_slice(&chunk);
         }
         let value: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
-        let key = keys::selected(&self.settings.provider).ok();
+        let key = self.credential().ok();
         let detail = if matches!(status.as_u16(), 429 | 502 | 503 | 504) {
             transient_error_detail(status.as_u16()).to_owned()
         } else {
@@ -212,6 +221,8 @@ impl Provider {
         }
         Ok(Self {
             settings,
+            credential_id: None,
+            request_guard: None,
             client: reqwest::Client::builder()
                 .no_proxy()
                 .redirect(reqwest::redirect::Policy::none())
@@ -222,10 +233,20 @@ impl Provider {
     }
     fn authorize(&self, request: reqwest::RequestBuilder) -> Result<reqwest::RequestBuilder> {
         if cloud(&self.settings.provider) {
-            let key = keys::selected(&self.settings.provider)?;
+            let key = self.credential()?;
             Ok(authorize_cloud(request, &self.settings.provider, &key)?)
         } else {
             Ok(request)
+        }
+    }
+    pub fn with_credential(mut self, id: Option<String>) -> Self {
+        self.credential_id = id;
+        self
+    }
+    fn credential(&self) -> Result<String> {
+        match &self.credential_id {
+            Some(id) => keys::by_id(&self.settings.provider, id),
+            None => keys::selected(&self.settings.provider),
         }
     }
     fn url(&self, path: &str) -> String {
@@ -354,10 +375,11 @@ impl Provider {
         if self.settings.provider == "gemini" {
             let path = gemini::path(&self.settings.chat_model, false)?;
             let body = gemini::body(system, prompt, output_limit, schema);
-            let response = send_with_retry(
+            let response = send_guarded(
                 self.authorize(self.client.post(self.url(&path)))?
                     .json(&body),
                 &[Duration::from_secs(1), Duration::from_secs(2)],
+                self.request_guard.as_deref(),
             )
             .await?;
             let value = self.checked_json(response).await?;
@@ -380,10 +402,11 @@ impl Provider {
             )
         };
         configure_generation_body(&self.settings.provider, &mut body, output_limit, schema);
-        let response = send_with_retry(
+        let response = send_guarded(
             self.authorize(self.client.post(self.url(path)))?
                 .json(&body),
             &[Duration::from_secs(1), Duration::from_secs(2)],
+            self.request_guard.as_deref(),
         )
         .await?;
         let value = self.checked_json(response).await?;
@@ -436,11 +459,22 @@ fn configure_generation_body(
 
 // Retry only explicit transient HTTP failures before any response is applied.
 // Dropping this future (timeout/cancellation) also drops the retry delay.
+#[cfg(test)]
 async fn send_with_retry(
     request: reqwest::RequestBuilder,
     delays: &[Duration],
 ) -> Result<reqwest::Response> {
+    send_guarded(request, delays, None).await
+}
+async fn send_guarded(
+    request: reqwest::RequestBuilder,
+    delays: &[Duration],
+    guard: Option<&(dyn Fn() -> Result<()> + Send + Sync)>,
+) -> Result<reqwest::Response> {
     for attempt in 0..=delays.len() {
+        if let Some(guard) = guard {
+            guard()?;
+        }
         let response = request
             .try_clone()
             .context("Request cannot be retried")?
@@ -507,7 +541,7 @@ fn provider_error_detail(value: &Value, key: Option<&str>) -> String {
 }
 
 pub fn set_youtube_key(key: &str) -> Result<()> {
-    let entry = keyring::Entry::new("Consilium", "youtube-api-key")?;
+    let entry = keyring::Entry::new("ConsiliumNext", "youtube-api-key")?;
     if key.is_empty() {
         let _ = entry.delete_credential();
     } else {
@@ -541,7 +575,7 @@ pub async fn discover(kind: &str, query: &str) -> Result<Vec<Resource>> {
     }
     let client = online_client()?;
     if kind == "youtube" {
-        let key = keyring::Entry::new("Consilium", "youtube-api-key")?
+        let key = keyring::Entry::new("ConsiliumNext", "youtube-api-key")?
             .get_password()
             .context("Add a YouTube API key in Settings")?;
         let value: Value = client

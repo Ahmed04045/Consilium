@@ -189,7 +189,7 @@ async function desktop(page: import("@playwright/test").Page) {
       },
     };
   });
-  await page.goto("/");
+  await page.goto("/?legacy");
   await page
     .getByRole("button", { name: "Open calendar", exact: true })
     .click();
@@ -402,7 +402,7 @@ test("neutral calendar layout and preview errors preserve task draft", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto("/");
+  await page.goto("/?legacy");
   await page.getByRole("button", { name: "Preview calendar" }).click();
   await expect(page.locator(".calendar-task")).toHaveCount(0);
   await page.screenshot({

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/domain", "crates/storage", "crates/adapters", "crates/application", "apps/desktop/src-tauri"]
+members = ["crates/domain", "crates/storage", "crates/adapters", "crates/application", "crates/workflow", "crates/cli", "apps/desktop/src-tauri"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -13,3 +13,4 @@ consilium-domain = { path = "crates/domain" }
 consilium-storage = { path = "crates/storage" }
 consilium-adapters = { path = "crates/adapters" }
 consilium-application = { path = "crates/application" }
+consilium-workflow = { path = "crates/workflow" }

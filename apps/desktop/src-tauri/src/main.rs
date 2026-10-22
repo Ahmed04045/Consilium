@@ -17,6 +17,36 @@ async fn rpc(
     action: String,
     payload: Value,
 ) -> Result<Value, String> {
+    if action == "next_pick_path" {
+        let picker = rfd::AsyncFileDialog::new().set_title("Bind a local resource");
+        let file = if payload["kind"] == "folder" {
+            picker.pick_folder().await
+        } else if payload["writable"] == true {
+            picker.save_file().await
+        } else {
+            picker.pick_file().await
+        };
+        return Ok(
+            serde_json::json!({"path":file.map(|f| f.path().to_string_lossy().to_string())}),
+        );
+    }
+    if action == "next_import_dialog" {
+        if let Some(folder) = rfd::AsyncFileDialog::new()
+            .set_title("Choose the preview vault to copy")
+            .pick_folder()
+            .await
+        {
+            return state
+                .engine
+                .run(
+                    "next_import_preview",
+                    serde_json::json!({"path":folder.path().to_string_lossy()}),
+                )
+                .await
+                .map_err(|e| e.to_string());
+        }
+        return Ok(Value::Null);
+    }
     if action == "choose_task_folder" {
         let snapshot = state
             .engine
@@ -97,7 +127,7 @@ async fn rpc(
                 .as_nanos()
         );
         tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::App("index.html".into()))
-            .title("Consilium")
+            .title("Consilium Next")
             .inner_size(1320.0, 880.0)
             .min_inner_size(940.0, 640.0)
             .decorations(false)
@@ -224,7 +254,7 @@ fn base_root() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     Ok(std::path::PathBuf::from(
         std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA is not available")?,
     )
-    .join("Consilium"))
+    .join("Consilium Next"))
 }
 fn save_vault_location(path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write;

@@ -65,6 +65,50 @@ fn hash(s: &str) -> String {
 }
 
 impl Store {
+    /// Consistent, read-only snapshot of another vault. The source is never migrated.
+    pub fn import_snapshot(
+        &self,
+        source: &std::path::Path,
+    ) -> Result<Vec<(String, serde_json::Value)>> {
+        use serde_json::Value;
+        let source = source.canonicalize()?;
+        if source == self.root.canonicalize()? {
+            bail!("Choose a different source vault");
+        }
+        let db = Connection::open_with_flags(
+            source.join("consilium.sqlite"),
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )?;
+        db.busy_timeout(std::time::Duration::from_secs(5))?;
+        let dest = self.root.join("imports").join(id());
+        fs::create_dir_all(&dest)?;
+        db.backup(
+            rusqlite::DatabaseName::Main,
+            dest.join("consilium.sqlite"),
+            None,
+        )?;
+        if source.join("notes").is_dir() {
+            fs::create_dir_all(dest.join("notes"))?;
+            for entry in fs::read_dir(source.join("notes"))? {
+                let entry = entry?;
+                if entry.file_type()?.is_file() {
+                    fs::copy(entry.path(), dest.join("notes").join(entry.file_name()))?;
+                }
+            }
+        }
+        let snapshot = Connection::open_with_flags(
+            dest.join("consilium.sqlite"),
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )?;
+        let mut statement = snapshot.prepare("SELECT key,json FROM records ORDER BY key")?;
+        let rows =
+            statement.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        rows.map(|r| {
+            let (key, json) = r?;
+            Ok((key, serde_json::from_str::<Value>(&json)?))
+        })
+        .collect()
+    }
     pub fn new(root: PathBuf) -> Result<Self> {
         fs::create_dir_all(root.join("notes"))?;
         let store = Self { root };

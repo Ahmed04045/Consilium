@@ -337,3 +337,4 @@ mod tests {
         assert!(validate_plan(&old, &tracks, Some(&old)).is_ok());
     }
 }
+pub mod next;

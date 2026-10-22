@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 mod calendar;
+pub mod next;
 mod workspace;
 use consilium_adapters::{discover, Provider};
 use consilium_domain::*;
@@ -242,6 +243,9 @@ impl Engine {
         )
     }
     pub async fn run(&self, action: &str, payload: Value) -> Result<Value> {
+        if action.starts_with("next_") {
+            return self.next_action(action, payload).await;
+        }
         if action.starts_with("workspace_") {
             return self.workspace_action(action, payload).await;
         }

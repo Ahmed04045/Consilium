@@ -29,7 +29,7 @@ impl AccountConfig {
     fn entry(&self) -> Result<keyring::Entry> {
         self.validate()?;
         Ok(keyring::Entry::new(
-            "Consilium",
+            "ConsiliumNext",
             &format!("account-{}", self.project_url.trim_end_matches('/')),
         )?)
     }

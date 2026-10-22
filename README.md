@@ -1,27 +1,43 @@
-# Consilium
+# Consilium Next
 
-A local Windows calendar and contextual assistant built with Tauri, Rust, React and SQLite.
+A local Windows workspace for calendars, documents, conversations and visual AI workflows. Built with Tauri 2, Rust, React, SQLite, React Flow and the bundled Wordcraft editor.
 
-Previous preview baseline: **Consilium 1.0 Preview**. Current working build: **2.0.0-alpha.4**, with native Gemini requests and a smaller provider schema on top of task document tabs, scoped conversations and folder links. See the [Gemini update](docs/v2-alpha4-release-notes.md), [v2 roadmap](docs/v2-roadmap.md), [document integration](docs/wordcraft-integration.md), and [v1 verification](docs/release-verification.md) for the earlier release's tested scope.
+Current development release: **3.0.0-alpha.1 — unsigned preview**. Consilium Next has a separate application identity, vault and credential namespace. The previous daily-use preview is preserved at commit `258765e` on `preview/2.0-alpha.4`; this work is on `next-workspaces`.
 
-## Run or build
+## Start here
 
-Use target/release/consilium-desktop.exe or target/release/bundle/nsis/Consilium_2.0.0-alpha.4_x64-setup.exe for the current development build. The earlier Consilium_1.0.0_x64-setup.exe is the v1 preview. Installers are unsigned. Existing 0.1/0.2 installers are older builds.
+- [Next guide and CLI](docs/next-guide.md)
+- [Implementation and verification](docs/next-implementation.md)
+- [Release notes](docs/next-release-notes.md)
+- [Wordcraft licensing and build details](docs/wordcraft-integration.md)
 
-For development, install Node.js, Rust MSVC (1.95+), Visual Studio C++ build tools and WebView2. Run npm ci, npm --prefix apps/desktop run build:editor, then npm run tauri -- dev. Packaging builds the editor automatically. npm run dev is a read-only browser preview.
+Build artifacts: `target/release/consilium-next.exe`, terminal client `target/release/consilium.exe`, and `target/release/bundle/nsis/Consilium Next_3.0.0-alpha.1_x64-setup.exe`. The installer includes the terminal client in its `cli` directory. It does not add it to PATH.
 
-## Daily use
+## Build and verify
 
-Create tasks with Ctrl+N or click a date/hour. Use Day/Week for minute-positioned scheduling. Labels can be colored and filtered. Type directly in the top search field; use sidebar Search for a full search tab. Settings stays open when navigating.
+Windows 11 x64, Node.js 24, Rust MSVC 1.95+, Visual Studio C++ build tools and WebView2 are required.
 
-Click a task for its document, linked folder and AI chat in a retained tab. Hover briefly for details and Complete / Mark incomplete. Documents can be dedicated to the task or shared by its label. They save locally and can export to DOCX. Scoped chat is conversational; task changes still use Edit task or the calendar Assistant.
+```powershell
+npm ci
+npm --prefix apps/desktop run build:editor
+npm run tauri -- dev
+```
 
-Settings supports local Ollama/OpenAI-compatible models, Gemini and OpenRouter. Name and select a saved API key, save provider/model settings, then test the connection. API keys stay in Windows Credential Manager. Assistant → Context & history stores your goals, time constraints and preferences locally. Describe the schedule naturally and send; inspect proposed tasks and date coverage before adding them. A cloud send shares the current context, request and relevant tasks with the selected provider. Context preview is optional; historical versions stay local.
+```powershell
+cargo fmt --all -- --check
+cargo test --workspace --exclude consilium --locked
+npm test
+npm run tauri -- build
+```
 
-Calendars start empty. No notes/resources/video interface, telemetry or cloud sync setup appears. The vault lives under %LOCALAPPDATA%\Consilium. SQLite stores calendars, labels and context history; backups include these records. Supabase/LAN/phone access is not enabled in this release.
+From `apps/desktop`, run `node tests/next-native.mjs` after packaging. This starts a separate temporary vault and local synthetic provider, runs both acceptance workflows through desktop and CLI, and checks actual Wordcraft editing and graph rendering. It does not use personal API keys or the preview vault.
 
-## Verification
+Use Tauri's build command for packaged desktop binaries. A direct Cargo build requires `--features tauri/custom-protocol`; otherwise it uses the development server URL.
 
-Run cargo test --workspace --exclude consilium --locked, npm test, npm run build and npm run tauri -- build. From apps/desktop run node tests/calendar-smoke.mjs for the isolated Windows smoke test. Tests use synthetic data and simulated providers.
+## Data and execution
 
-See [release status](docs/release-status.md), [validation](docs/validation.md), [AI setup](docs/cloud-and-sync.md), and the [Android companion prompt](docs/android-companion-prompt.md). The interface uses locally bundled Google Sans; Wordcraft also includes licensed fonts for editable document typography. User-provided PNG logos are retained in apps/desktop/public; native assets are generated under src-tauri/icons.
+Runtime data lives in `%LOCALAPPDATA%\Consilium Next`, outside this repository. Named API keys use Windows Credential Manager's `ConsiliumNext` namespace. Local models, Gemini and OpenRouter are supported through independently selected profiles. Cloud messages go only to the displayed provider after Send or an approved workflow run.
+
+Networks are manually started after review. Native scripts run with the user's permissions; Windows Job Objects control ordinary child-process lifetime and are not a sandbox. Linking a folder does not upload its contents. Exports omit credentials, bindings, run history and literal run inputs; inspect authored scripts and prompts before sharing them.
+
+No account, sync service, telemetry, automatic model download or always-on workflow scheduler is required. Live collaboration and optional Craft add-ons are later work. Keep this an unsigned preview until clean-machine installation and normal-use validation are complete.
