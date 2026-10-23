@@ -1,5 +1,12 @@
-# Consilium Next — 3.0.0-alpha.2
+# Consilium Next — 3.0.0-alpha.3
 
+- Native file/folder pickers directly in node properties, including script inputs and file/DOCX output destinations.
+- Calendar and network Save / Save as with visible locations and protection against overwriting external edits.
+- Portable `.consilium` files and folder exports, with or without selected input content.
+- Transactional project imports with new identities, restored inputs, preserved calendar exceptions and no automatic execution.
+- Local network draft recovery and clear documentation of vault versus project storage.
+
+## Previous usability update (alpha.2)
 - Grouped node folders with icons, drag-to-place, larger connection pins and descriptions.
 - Icon nodes for agents, files, calendars and logic; process blocks expose simple properties inline.
 - Readable property controls, a program editor and linked program files; JSON remains available under Advanced.

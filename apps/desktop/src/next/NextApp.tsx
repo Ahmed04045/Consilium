@@ -341,6 +341,20 @@ export default function NextApp() {
               <button onClick={() => create()}>
                 Create… <kbd>Ctrl N</kbd>
               </button>
+              <button
+                onClick={() =>
+                  void call("next_project_dialog", { operation: "open" })
+                    .then(async (r) => {
+                      if (!r.cancelled) {
+                        await refresh();
+                        open(r.kind, r.id);
+                      }
+                    })
+                    .catch(error)
+                }
+              >
+                Open project…
+              </button>
               <button onClick={() => void call("new_window").catch(error)}>
                 New window
               </button>

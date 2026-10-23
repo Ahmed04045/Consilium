@@ -1,4 +1,4 @@
-import { Data, useWorkspace } from "./state";
+import { Data, useWorkspace, call, uid } from "./state";
 import { catalog } from "./NodeCatalog";
 
 export function NodeProperties({
@@ -11,6 +11,37 @@ export function NodeProperties({
   const w = useWorkspace(),
     c = node.config,
     kind = node.kind;
+  function browse(field: string, resourceKind = "file", writable = false) {
+    return (
+      <button
+        type="button"
+        onClick={() =>
+          void (async () => {
+            const picked = await call("next_pick_path", {
+              kind: resourceKind,
+              writable,
+            });
+            if (!picked.path) return;
+            const binding = {
+              id: uid(),
+              name: picked.path.split(/[\\/]/).pop() || "Selected resource",
+              kind: resourceKind,
+              path: picked.path,
+              writable,
+            };
+            await w.save("binding", binding);
+            update({ [field]: binding.id });
+          })().catch(w.error)
+        }
+      >
+        {writable
+          ? "Choose output location…"
+          : resourceKind === "folder"
+            ? "Browse folder…"
+            : "Browse file…"}
+      </button>
+    );
+  }
   function choose(
     label: string,
     field: string,
@@ -160,6 +191,7 @@ export function NodeProperties({
                 "binding",
                 (b) => b.kind === "executable",
               )}
+              {browse("executable_binding", "executable")}
               <label>
                 Language
                 <select
@@ -188,6 +220,7 @@ export function NodeProperties({
                 (b) => b.kind === "file" && !b.writable,
                 "Write code here",
               )}
+              {browse("script_binding")}
               {!c.script_binding && (
                 <label>
                   Program
@@ -237,6 +270,19 @@ export function NodeProperties({
               </select>
             </label>
           )}
+          {browse(
+            "binding_id",
+            kind === "folder_read" ? "folder" : "file",
+            kind === "file_write",
+          )}
+          {c.binding_id && (
+            <small className="nx-file-path">
+              {
+                w.data.binding.find((r) => r.value.id === c.binding_id)?.value
+                  .path
+              }
+            </small>
+          )}
         </>
       )}
       {kind.startsWith("calendar_") &&
@@ -252,6 +298,18 @@ export function NodeProperties({
           )}
           {kind === "document_write" &&
             field("Document title", "title", "Workflow document")}
+          {kind === "document_export" && (
+            <>
+              {choose(
+                "DOCX destination",
+                "binding_id",
+                "binding",
+                (b) => b.kind === "file" && b.writable,
+                "Local run output (choose to change)",
+              )}
+              {browse("binding_id", "file", true)}
+            </>
+          )}
         </>
       )}
       {(kind === "condition" || kind === "loop") && (

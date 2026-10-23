@@ -17,6 +17,63 @@ async fn rpc(
     action: String,
     payload: Value,
 ) -> Result<Value, String> {
+    if action == "next_project_dialog" {
+        let mut p = payload;
+        if p["operation"] == "open" {
+            let picked = rfd::AsyncFileDialog::new()
+                .set_title("Open Consilium project (imports a local copy)")
+                .add_filter("Consilium project", &["consilium"])
+                .pick_file()
+                .await;
+            let Some(file) = picked else {
+                return Ok(serde_json::json!({"cancelled":true}));
+            };
+            return state
+                .engine
+                .run("next_project_read", serde_json::json!({"path":file.path()}))
+                .await
+                .map_err(|e| e.to_string());
+        }
+        let picked = if p["mode"] == "folder" || p["save_folder"] == true {
+            rfd::AsyncFileDialog::new()
+                .set_title("Choose the destination folder")
+                .pick_folder()
+                .await
+        } else {
+            rfd::AsyncFileDialog::new()
+                .set_title("Save Consilium project")
+                .set_file_name("project.consilium")
+                .add_filter("Consilium project", &["consilium"])
+                .save_file()
+                .await
+        };
+        let Some(file) = picked else {
+            return Ok(serde_json::json!({"cancelled":true}));
+        };
+        let mut path = file.path().to_path_buf();
+        if p["mode"] == "folder" {
+            let name = p["folder_name"].as_str().unwrap_or("Consilium project");
+            if name.trim().is_empty()
+                || name.contains(['/', '\\', ':'])
+                || name == "."
+                || name == ".."
+            {
+                return Err("Choose a simple project folder name".into());
+            }
+            path = path.join(name);
+        } else if p["save_folder"] == true {
+            path = path.join("project.consilium");
+            if path.exists() {
+                return Err("This folder already contains project.consilium. Choose a different folder or save as a file.".into());
+            }
+        }
+        p["path"] = serde_json::json!(path);
+        return state
+            .engine
+            .run("next_project_write", p)
+            .await
+            .map_err(|e| e.to_string());
+    }
     if action == "next_pick_path" {
         let picker = rfd::AsyncFileDialog::new().set_title("Bind a local resource");
         let file = if payload["kind"] == "folder" {

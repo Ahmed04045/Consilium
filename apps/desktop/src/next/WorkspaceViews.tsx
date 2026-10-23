@@ -11,6 +11,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { Customization } from "../Customization";
+import { openProject } from "./ProjectFiles";
 import {
   call,
   useWorkspace,
@@ -886,6 +887,9 @@ export function SettingsView() {
         >
           Create backup
         </button>
+        <button onClick={() => void openProject(w).catch(w.error)}>
+          Open Consilium project…
+        </button>
         <button onClick={() => download("workspace-records.json", w.data)}>
           Export local records
         </button>
@@ -899,7 +903,7 @@ export function SettingsView() {
           Export migration archive
         </button>
         <label>
-          Import a network
+          Import a legacy network
           <input
             type="file"
             accept=".json"

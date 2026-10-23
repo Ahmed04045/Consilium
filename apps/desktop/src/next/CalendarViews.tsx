@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { readAppearance } from "../Customization";
+import { ProjectFiles } from "./ProjectFiles";
 import {
   ChevronLeft,
   ChevronRight,
@@ -550,6 +551,7 @@ export function CalendarView({ id }: { id: string }) {
     <div className="nx-calendar">
       <header className="nx-toolbar">
         <h1>{calendar.name}</h1>
+        <ProjectFiles kind="calendar" id={id} />
         <button onClick={() => setDate(localDate())}>Today</button>
         <button aria-label="Previous period" onClick={() => move(-1)}>
           <ChevronLeft size={18} />

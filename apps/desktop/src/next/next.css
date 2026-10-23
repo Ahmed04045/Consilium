@@ -1244,3 +1244,25 @@
     display: none;
   }
 }
+
+.nx-file-path {
+  overflow-wrap: anywhere;
+}
+.nx-project-dialog > small {
+  display: block;
+  margin-top: 10px;
+}
+.nx-project-dialog select {
+  width: 100%;
+}
+.nx-project-location {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nx-muted);
+  font-size: 11px;
+}
+.nx-toolbar {
+  flex-wrap: wrap;
+}

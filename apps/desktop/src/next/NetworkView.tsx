@@ -16,7 +16,6 @@ import {
 import "@xyflow/react/dist/style.css";
 import {
   Play,
-  Save,
   Undo,
   Redo,
   Copy,
@@ -27,6 +26,7 @@ import {
 import { useWorkspace, row, call, Data, uid, download } from "./state";
 import { catalog, groups, nodeSummary } from "./NodeCatalog";
 import { NodeProperties } from "./NodeProperties";
+import { ProjectFiles } from "./ProjectFiles";
 function GraphNode({ data, selected }: NodeProps) {
   const d = data as Data;
   const Icon = catalog[d.kind].icon;
@@ -209,6 +209,31 @@ export function NetworkView({ id }: { id: string }) {
   const canvas = useRef<HTMLDivElement>(null),
     savedGraph = useRef(JSON.stringify(record?.value));
   const initiallyPopulated = useRef(Boolean(record?.value.nodes.length));
+  // Recovery drafts are independent of explicitly saved portable project files.
+  useEffect(() => {
+    try {
+      const draft = JSON.parse(
+        localStorage.getItem(`network-draft:${id}`) || "null",
+      );
+      if (draft?.revision === record?.revision && draft.graph?.id === id)
+        setGraph(draft.graph);
+    } catch {
+      /* Ignore a damaged recovery draft. */
+    }
+  }, [id]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          `network-draft:${id}`,
+          JSON.stringify({ revision, graph }),
+        );
+      } catch {
+        /* Portable saves remain available when recovery storage is full. */
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [graph, revision, id]);
   const selectedNode = graph.nodes.find((n: Data) => n.id === selected),
     runs = w.data.run
       .filter((r) => r.value.network_id === id)
@@ -420,10 +445,7 @@ export function NetworkView({ id }: { id: string }) {
           <Redo size={16} />
         </button>
         <span className="nx-spacer" />
-        <button onClick={() => void save().catch(w.error)}>
-          <Save size={16} />
-          Save
-        </button>
+        <ProjectFiles kind="network" id={id} beforeSave={save} />
         <button
           onClick={() =>
             void call("next_network_validate", { network: graph, revision })
@@ -436,16 +458,6 @@ export function NetworkView({ id }: { id: string }) {
           }
         >
           Validate
-        </button>
-        <button
-          onClick={() =>
-            void save()
-              .then(() => call("next_network_export", { id }))
-              .then((v) => download(`${record.value.name}.network.json`, v))
-              .catch(w.error)
-          }
-        >
-          Export graph & scripts
         </button>
         <button
           className="nx-primary"

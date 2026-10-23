@@ -536,6 +536,14 @@ try {
   const study = (await rpc("next_snapshot")).document.find(
     (r) => r.value.title === "Synthetic study guide",
   );
+  const chosenDocx = join(root, "chosen-study.docx");
+  await save("binding", {
+    id: "docx-destination",
+    name: "Selected DOCX output",
+    kind: "file",
+    writable: true,
+    path: chosenDocx,
+  });
   await save("network", {
     schema_version: 1,
     id: "docx-export",
@@ -545,7 +553,7 @@ try {
         id: "export",
         kind: "document_export",
         title: "Export study",
-        config: { document_id: study.value.id },
+        config: { document_id: study.value.id, binding_id: "docx-destination" },
         position: { x: 0, y: 0 },
       },
     ],
@@ -560,6 +568,7 @@ try {
     input: {},
   });
   assert.equal(exportedRun.status, "completed");
+  assert.equal(exportedRun.nodes.export.output.path, chosenDocx);
   assert.equal(
     readFileSync(exportedRun.nodes.export.output.path)
       .subarray(0, 2)
@@ -633,11 +642,43 @@ try {
   );
   await page.getByLabel("Search this network").fill("");
   await page.screenshot({ path: "../../docs/screenshots/next-network.png" });
+  await page.getByRole("button", { name: "Export…", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Export project" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "../../target/next-project-export.png",
+  });
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.locator("iframe")).toHaveCount(0);
   const savedDocument = (await rpc("next_snapshot")).document.find((r) =>
     r.value.text.includes("Synthetic native editor roundtrip."),
   );
   assert(savedDocument.value.text.includes("Saved while switching tabs."));
+  // Portable snapshots are saved outside the vault and imported without executing.
+  const beforeProjectRuns = (await rpc("next_snapshot")).run.length;
+  for (const [kind, id] of [
+    ["network", codeData.id],
+    ["calendar", "fixture-calendar"],
+  ]) {
+    const projectPath = join(root, `${kind}.consilium`);
+    const saved = await rpc("next_project_write", {
+      kind,
+      id,
+      path: projectPath,
+      remember: true,
+      inputs: true,
+    });
+    assert.equal(saved.path, projectPath);
+    assert.equal(
+      (await rpc("next_project_status", { kind, id })).location.path,
+      projectPath,
+    );
+    const opened = await rpc("next_project_read", { path: projectPath });
+    assert.equal(opened.kind, kind);
+    assert.notEqual(opened.id, id);
+  }
+  assert.equal((await rpc("next_snapshot")).run.length, beforeProjectRuns);
   await page
     .getByRole("tab", { name: "Vocabulary practice", exact: true })
     .last()

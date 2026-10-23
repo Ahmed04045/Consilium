@@ -1,6 +1,6 @@
 # Consilium Next implementation and verification
 
-Updated 2026-10-23. Version **3.0.0-alpha.2**, unsigned development preview.
+Updated 2026-10-23. Version **3.0.0-alpha.3**, unsigned development preview.
 
 Baseline: commit `258765e`, branch `preview/2.0-alpha.4`. Development branch: `next-workspaces`. The preview executable, installer, vault and credential namespace are preserved.
 
@@ -22,6 +22,13 @@ Baseline: commit `258765e`, branch `preview/2.0-alpha.4`. Development branch: `n
 - [x] Learning and code/data acceptance workflows through desktop and CLI with synthetic model responses.
 
 ## Verification evidence
+
+### Alpha.3 project files
+
+- Five portable-project Rust tests cover input restoration, algorithm-only exports with program source, calendar occurrence/document identity, external-edit conflicts, traversal rejection and stopped imports. Application/workflow suites total 42 passing tests.
+- Six Next browser checks cover existing editor behavior plus Save/Export formats, cancellation and accessible format controls.
+- Windows file dialogs use the existing native `rfd` integration. Native acceptance additionally exercises explicit DOCX destinations, project write/status/read through IPC, and unchanged run counts after import.
+- Project files are manually saved snapshots. Open imports a local copy; file associations/double-click opening and automatic folder synchronization are not implemented.
 
 ### Alpha.2 usability update
 

@@ -77,3 +77,23 @@ Create backup saves Markdown and a consistent SQLite snapshot. Export local reco
 ## Current release boundary
 
 This is a development preview. Both acceptance workflows use a deterministic local provider to verify routing, validation and persistence; that does not establish the quality of every real Gemini/OpenRouter/local model. Real-provider trials, longer normal use and clean-machine installer checks remain release gates. JSON schemas and nested loop bodies still use Advanced configuration. Live collaboration, scheduled triggers and other Craft add-ons are intentionally deferred.
+
+## Project files and save locations (alpha.3)
+
+The local working vault defaults to `%LOCALAPPDATA%\Consilium Next\` (or the vault chosen in Settings). It is working storage, not a disposable cache: it contains records, documents, conversations and run history. Network canvas drafts also use WebView local recovery storage. Back up the vault before removing or moving it.
+
+Calendar and Network toolbars now have **Save**, **Save as…**, and **Export…**. The location is shown beside these controls, with the full path in its tooltip. Save as lets you select a `.consilium` file or put `project.consilium` in a chosen folder. Subsequent Save updates that file; it detects external file edits and asks you to use Save as instead. Working drafts remain local until explicitly saved or exported. Opening another task or editing a calendar does not automatically rewrite a saved portable file: press Save to update the snapshot.
+
+Export offers:
+
+- **Folder with input files:** a new named folder containing `project.consilium` and an `assets` folder with copies of selected read-only input files/folders.
+- **Folder without input content:** the same project structure without data inputs or Input node values. Linked program source is retained as part of the algorithm.
+- **Single Consilium file:** a versioned, self-contained `.consilium` project. Choose whether to include input content. This is an open JSON-based format, not encryption or a lock preventing other tools from reading it.
+
+All formats include the selected calendar/network and connected calendar tasks, labels, occurrence overrides and documents. They exclude credentials, model-profile records, runtime logs and local binding paths. They do not package every object in the app, unrelated conversations or arbitrary folder links. Authored scripts, prompts and documents may themselves contain private information; review before sharing. Included input content is limited to 64 MB and 2,000 entries. Junctions/symlinks are rejected rather than following them outside the selected folder.
+
+Use **File → Open project…** or Settings → Open Consilium project to import a local copy from a `.consilium` file; for a folder export, select its `project.consilium`. Copies get new record identities and restored inputs under the local vault's `project-inputs` folder. Original files and projects are preserved. Select model profiles, installed runtimes and output destinations again; importing does not execute any node. Save the imported copy to a destination when ready. Legacy `.network.json` remains supported through the legacy import control and CLI.
+
+In a file/folder node, **Browse file…** or **Browse folder…** opens the native Windows picker and creates a local binding automatically. **Choose output location…** opens Save As for Write file and Export document nodes. Linked program files and installed runtimes can be selected directly too. DOCX export nodes without a chosen destination retain the earlier local run-output behavior.
+
+“Next” is the preview channel name. Its separate installer identity, vault and credential namespace protect the earlier Consilium preview; it is not a required permanent product name.

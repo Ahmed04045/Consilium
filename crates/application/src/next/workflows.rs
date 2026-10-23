@@ -263,7 +263,7 @@ impl Host for Engine {
                             // Approval hashes the source itself; execution uses this frozen copy.
                             resources.insert(format!("script:{id}"), json!(source));
                         }
-                        if node.kind == "file_write" {
+                        if node.kind == "file_write" || node.kind == "document_export" {
                             ensure!(b.writable, "File output requires a writable binding");
                         }
                     }
@@ -450,9 +450,20 @@ impl Host for Engine {
                 let bytes = wordcraft_docx::write(&doc)?;
                 let dir = self.store.root.join("runs").join(run_id);
                 tokio::fs::create_dir_all(&dir).await?;
-                let path = dir.join(format!("{}.docx", node.id));
+                let path = if node.config["binding_id"].as_str().is_some() {
+                    let b = binding("binding_id")?;
+                    ensure!(
+                        b.kind == "file" && b.writable,
+                        "Choose a writable DOCX destination"
+                    );
+                    std::path::PathBuf::from(b.path)
+                } else {
+                    dir.join(format!("{}.docx", node.id))
+                };
                 use std::io::Write;
-                let mut tmp = tempfile::NamedTempFile::new_in(&dir)?;
+                let mut tmp = tempfile::NamedTempFile::new_in(
+                    path.parent().context("Output folder unavailable")?,
+                )?;
                 tmp.write_all(&bytes)?;
                 tmp.as_file().sync_all()?;
                 tmp.persist(&path)?;

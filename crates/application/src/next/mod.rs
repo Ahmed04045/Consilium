@@ -1,6 +1,7 @@
 //! Versioned workspace services shared by the desktop and command line.
 mod conversation;
 mod migration;
+mod projects;
 #[cfg(test)]
 mod tests;
 mod wordcraft;
@@ -201,6 +202,9 @@ impl Engine {
         Ok(record)
     }
     pub async fn next_action(&self, action: &str, p: Value) -> Result<Value> {
+        if action.starts_with("next_project_") {
+            return self.project_action(action, p);
+        }
         if action.starts_with("next_network_") || action.starts_with("next_run_") {
             return self.workflow_action(action, p).await;
         }

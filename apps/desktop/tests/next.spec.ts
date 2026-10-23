@@ -154,7 +154,7 @@ test("network canvas measures nodes, searches, groups and retains edits", async 
   await page.getByLabel("Group name").fill("Reading stage");
   await page.getByRole("button", { name: "Apply group", exact: true }).click();
   await expect(page.locator(".nx-graph-node")).toContainText("Reading stage");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.waitForTimeout(400); // Allow the local recovery draft to persist.
   await page.getByRole("tab", { name: "Home", exact: true }).click();
   await page.getByRole("tab", { name: "Graph checks", exact: true }).click();
   await expect(page.locator(".nx-graph-node")).toContainText("Reading input");
@@ -219,4 +219,41 @@ test("library drag placement, visible pins and process properties work without J
     page.getByText("Build & discuss network", { exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel("Mode", { exact: true })).toHaveCount(0);
+});
+
+test("project save and export expose formats without invoking a picker until confirmed", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Home", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Control+n");
+  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Portable calendar");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Save…", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Save project" }),
+  ).toBeVisible();
+  await page.getByLabel("Format", { exact: true }).selectOption("folder");
+  await expect(
+    page.getByRole("button", { name: "Choose destination…" }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Export…", exact: true }).click();
+  await page.getByLabel("Format", { exact: true }).selectOption("algorithm");
+  await expect(page.getByLabel("New folder name")).toBeVisible();
+  await expect(page.getByRole("dialog")).toContainText("without input values");
+  await page.getByLabel("Format", { exact: true }).selectOption("file");
+  await expect(
+    page.getByRole("checkbox", { name: "Include selected input files" }),
+  ).toBeChecked();
+  const checkbox = await page
+    .getByRole("checkbox", { name: "Include selected input files" })
+    .boundingBox();
+  expect(checkbox?.width).toBeLessThanOrEqual(24);
+  expect(checkbox?.height).toBeLessThanOrEqual(24);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
