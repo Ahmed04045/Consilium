@@ -20,7 +20,9 @@ export function AssistantView({ id }: { id: string }) {
     record = row(w.data, "thread", id),
     thread = record?.value;
   const [scope, setScope] = useState(id.includes(":") ? id : ""),
-    [mode, setMode] = useState("schedule_chat"),
+    [mode, setMode] = useState(
+      id.startsWith("network:") ? "network_creation" : "schedule_chat",
+    ),
     [profile, setProfile] = useState(""),
     [draft, setDraft] = useState(""),
     [sending, setSending] = useState(false),
@@ -29,6 +31,12 @@ export function AssistantView({ id }: { id: string }) {
     [requestId, setRequestId] = useState("");
   const destination = thread?.scope || scope,
     profiles = w.data.profile;
+  const networkScope = destination.startsWith("network:");
+  const effectiveMode = networkScope
+    ? "network_creation"
+    : (thread?.mode || mode) === "network_creation"
+      ? "schedule_chat"
+      : thread?.mode || mode;
   const currentProfile = row(
     w.data,
     "profile",
@@ -39,7 +47,7 @@ export function AssistantView({ id }: { id: string }) {
       id: uid(),
       title: "New conversation",
       scope,
-      mode,
+      mode: effectiveMode,
       profile_id: profile,
       messages: [],
       summary: "",
@@ -136,7 +144,14 @@ export function AssistantView({ id }: { id: string }) {
                 Destination
                 <select
                   value={scope}
-                  onChange={(e) => setScope(e.target.value)}
+                  onChange={(e) => {
+                    setScope(e.target.value);
+                    setMode(
+                      e.target.value.startsWith("network:")
+                        ? "network_creation"
+                        : "schedule_chat",
+                    );
+                  }}
                 >
                   <option value="">Choose a destination</option>
                   {["calendar", "label", "task", "network"].map((kind) => (
@@ -156,27 +171,35 @@ export function AssistantView({ id }: { id: string }) {
                 </select>
               </label>
             )}
-            <label>
-              Mode
-              <select
-                value={thread?.mode || mode}
-                onChange={(e) => {
-                  if (thread)
-                    void w
-                      .save(
-                        "thread",
-                        { ...thread, mode: e.target.value },
-                        record!.revision,
-                      )
-                      .catch(w.error);
-                  else setMode(e.target.value);
-                }}
-              >
-                <option value="schedule_chat">Schedule chat</option>
-                <option value="schedule_planning">Schedule planning</option>
-                <option value="network_creation">Network creation</option>
-              </select>
-            </label>
+            {networkScope ? (
+              <label>
+                Working on<span>Build & discuss network</span>
+                <small>
+                  Ask for changes to receive a graph proposal for review.
+                </small>
+              </label>
+            ) : (
+              <label>
+                Mode
+                <select
+                  value={effectiveMode}
+                  onChange={(e) => {
+                    if (thread)
+                      void w
+                        .save(
+                          "thread",
+                          { ...thread, mode: e.target.value },
+                          record!.revision,
+                        )
+                        .catch(w.error);
+                    else setMode(e.target.value);
+                  }}
+                >
+                  <option value="schedule_chat">Schedule chat</option>
+                  <option value="schedule_planning">Schedule planning</option>
+                </select>
+              </label>
+            )}
             <label>
               Model profile
               <select
@@ -325,17 +348,28 @@ export function AssistantView({ id }: { id: string }) {
                 <div className="nx-diff">
                   <div>
                     <small>Before · revision {c.expected_revision}</small>
-                    <pre>
-                      {JSON.stringify(
-                        row(w.data, c.kind, c.id)?.value || null,
-                        null,
-                        2,
-                      )}
-                    </pre>
+                    <ProposalSummary
+                      kind={c.kind}
+                      value={row(w.data, c.kind, c.id)?.value}
+                    />
+                    <details>
+                      <summary>Advanced record details</summary>
+                      <pre>
+                        {JSON.stringify(
+                          row(w.data, c.kind, c.id)?.value || null,
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    </details>
                   </div>
                   <div>
                     <small>After</small>
-                    <pre>{JSON.stringify(c.value, null, 2)}</pre>
+                    <ProposalSummary kind={c.kind} value={c.value} />
+                    <details>
+                      <summary>Advanced record details</summary>
+                      <pre>{JSON.stringify(c.value, null, 2)}</pre>
+                    </details>
                   </div>
                 </div>
               </section>
@@ -364,6 +398,59 @@ export function AssistantView({ id }: { id: string }) {
 }
 function MessageGlyph() {
   return <div className="nx-assistant-mark">✦</div>;
+}
+function ProposalSummary({ kind, value }: { kind: string; value?: Data }) {
+  if (!value) return <p>New item</p>;
+  if (kind === "network")
+    return (
+      <>
+        <p>
+          {value.nodes.length} nodes · {value.edges.length} connections
+        </p>
+        <ul>
+          {value.nodes.map((n: Data) => (
+            <li key={n.id}>
+              {n.title} · {n.kind.replaceAll("_", " ")}
+            </li>
+          ))}
+        </ul>
+        <ul>
+          {value.edges.map((e: Data) => (
+            <li key={e.id}>
+              {value.nodes.find((n: Data) => n.id === e.source)?.title} →{" "}
+              {value.nodes.find((n: Data) => n.id === e.target)?.title}
+              {e.source_port !== "out" ? ` (${e.source_port})` : ""}
+            </li>
+          ))}
+        </ul>
+      </>
+    );
+  if (kind === "task")
+    return (
+      <>
+        <p>
+          {value.title}
+          {value.deleted ? " · Deleted" : value.completed ? " · Completed" : ""}
+        </p>
+        <p>
+          {value.start_date} {value.start_time} → {value.end_date}{" "}
+          {value.end_time}
+        </p>
+        <p>{value.description}</p>
+      </>
+    );
+  if (kind === "document")
+    return (
+      <>
+        <p>{value.title}</p>
+        <p>{String(value.text || "").slice(0, 1200)}</p>
+      </>
+    );
+  return (
+    <p>
+      {value.name || value.title} {value.color ? `· ${value.color}` : ""}
+    </p>
+  );
 }
 export function DocumentView({ id, active }: { id: string; active: boolean }) {
   const w = useWorkspace(),

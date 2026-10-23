@@ -5,6 +5,135 @@ use consilium_workflow::{
     *,
 };
 use std::sync::Arc;
+
+fn simple_process(config: &Value, input: &Value) -> Result<Option<Value>> {
+    match config["operation"].as_str().unwrap_or("script") {
+        "script" => Ok(None),
+        "select_fields" => {
+            let source = input
+                .as_object()
+                .context("Keep fields needs a JSON object as input")?;
+            let fields = config["fields"]
+                .as_array()
+                .context("Choose fields to keep")?;
+            let mut result = serde_json::Map::new();
+            for name in fields {
+                let name = name.as_str().context("Field names must be text")?;
+                result.insert(
+                    name.into(),
+                    source
+                        .get(name)
+                        .with_context(|| format!("Input is missing field {name}"))?
+                        .clone(),
+                );
+            }
+            Ok(Some(Value::Object(result)))
+        }
+        "format_text" => {
+            let mut rest = field(config, "template")?;
+            let mut result = String::new();
+            while let Some(start) = rest.find("{{") {
+                result.push_str(&rest[..start]);
+                let tail = &rest[start + 2..];
+                let end = tail
+                    .find("}}")
+                    .context("Close each template field with }}")?;
+                let name = tail[..end].trim();
+                let value = if name == "input" {
+                    input
+                } else {
+                    input
+                        .get(name)
+                        .with_context(|| format!("Input is missing field {name}"))?
+                };
+                if let Some(text) = value.as_str() {
+                    result.push_str(text);
+                } else {
+                    result.push_str(&value.to_string());
+                }
+                ensure!(result.len() <= 2_000_000, "Formatted output exceeds 2 MB");
+                rest = &tail[end + 2..];
+            }
+            result.push_str(rest);
+            ensure!(result.len() <= 2_000_000, "Formatted output exceeds 2 MB");
+            Ok(Some(json!(result)))
+        }
+        _ => bail!("Unknown process operation"),
+    }
+}
+
+#[cfg(test)]
+mod process_property_tests {
+    use super::*;
+    #[test]
+    fn simple_operations_preserve_types_and_reject_missing_fields() {
+        let input = json!({"title":"Hello", "count":3, "private":"excluded"});
+        assert_eq!(
+            simple_process(
+                &json!({"operation":"select_fields","fields":["title","count"]}),
+                &input
+            )
+            .unwrap(),
+            Some(json!({"title":"Hello","count":3}))
+        );
+        assert_eq!(
+            simple_process(
+                &json!({"operation":"format_text","template":"{{title}}: {{count}}"}),
+                &input
+            )
+            .unwrap(),
+            Some(json!("Hello: 3"))
+        );
+        assert!(simple_process(
+            &json!({"operation":"select_fields","fields":["missing"]}),
+            &input
+        )
+        .is_err());
+        assert!(simple_process(
+            &json!({"operation":"format_text","template":"{{missing}}"}),
+            &input
+        )
+        .is_err());
+        assert!(simple_process(
+            &json!({"operation":"format_text","template":"{{title"}),
+            &input
+        )
+        .is_err());
+    }
+    #[tokio::test]
+    async fn linked_program_is_frozen_and_changes_invalidate_review() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine::new(consilium_storage::Store::new(dir.path().join("vault")).unwrap());
+        let script = dir.path().join("program.py");
+        std::fs::write(&script, "print('original')").unwrap();
+        for (id, kind, path) in [
+            ("runtime", "executable", std::env::current_exe().unwrap()),
+            ("program", "file", script.clone()),
+        ] {
+            engine
+                .store
+                .write(
+                    &key("binding", id),
+                    0,
+                    &json!({"id":id,"name":id,"kind":kind,"path":path,"writable":false}),
+                )
+                .unwrap();
+        }
+        let network: NetworkDefinition = decode(json!({"schema_version":1,"id":"linked","name":"Linked program","nodes":[
+            {"id":"input","kind":"input","title":"Input","config":{},"position":{"x":0,"y":0}},
+            {"id":"program","kind":"process","title":"Program","config":{"executable_binding":"runtime","script_binding":"program","extension":"py"},"position":{"x":200,"y":0}}
+        ],"edges":[{"id":"edge","source":"input","target":"program","source_port":"out","target_port":"in"}]})).unwrap();
+        let before = runtime::review(&engine, compile(&network, 1).unwrap())
+            .await
+            .unwrap();
+        std::fs::write(&script, "print('changed')").unwrap();
+        let after = runtime::review(&engine, compile(&network, 1).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(before.resources["script:program"], "print('original')");
+        assert_ne!(before.approval_digest, after.approval_digest);
+    }
+}
 impl Engine {
     pub async fn workflow_action(&self, action: &str, p: Value) -> Result<Value> {
         match action {
@@ -98,6 +227,7 @@ impl Host for Engine {
                 ("profile_id", "profile"),
                 ("binding_id", "binding"),
                 ("executable_binding", "binding"),
+                ("script_binding", "binding"),
                 ("calendar_id", "calendar"),
                 ("document_id", "document"),
             ] {
@@ -115,6 +245,23 @@ impl Host for Engine {
                                 b.kind == "executable" && std::path::Path::new(&b.path).is_file(),
                                 "Choose an installed runtime executable"
                             );
+                        }
+                        if field_name == "script_binding" {
+                            ensure!(
+                                b.kind == "file" && !b.writable,
+                                "Choose a read-only program file binding"
+                            );
+                            ensure!(
+                                tokio::fs::metadata(&b.path).await?.len() <= 100000,
+                                "Program file exceeds 100 KB"
+                            );
+                            let source = tokio::fs::read_to_string(&b.path).await?;
+                            ensure!(
+                                !source.trim().is_empty() && source.len() <= 100000,
+                                "Program file is empty or too large"
+                            );
+                            // Approval hashes the source itself; execution uses this frozen copy.
+                            resources.insert(format!("script:{id}"), json!(source));
                         }
                         if node.kind == "file_write" {
                             ensure!(b.writable, "File output requires a writable binding");
@@ -181,7 +328,18 @@ impl Host for Engine {
                 }
             }
             "process" => {
+                if let Some(output) = simple_process(&node.config, &input)? {
+                    return Ok(output);
+                }
                 let b = binding("executable_binding")?;
+                let source = if let Some(id) = node.config["script_binding"].as_str() {
+                    resources
+                        .get(format!("script:{id}"))
+                        .and_then(Value::as_str)
+                        .context("Program source is outside the approved scope")?
+                } else {
+                    field(&node.config, "source")?
+                };
                 let args: Vec<String> = node
                     .config
                     .get("args")
@@ -193,7 +351,7 @@ impl Host for Engine {
                 consilium_workflow::process::execute(
                     std::path::Path::new(&b.path),
                     &args,
-                    field(&node.config, "source")?,
+                    source,
                     node.config["extension"].as_str().unwrap_or("py"),
                     &input,
                     &dir,
@@ -304,8 +462,11 @@ impl Host for Engine {
                 Ok(artifact)
             }
             "document_write" => {
-                let blocks: Vec<DocumentBlock> =
-                    decode(input.get("blocks").cloned().unwrap_or(input))?;
+                let blocks: Vec<DocumentBlock> = if let Some(text) = input.as_str() {
+                    vec![DocumentBlock::Paragraph { text: text.into() }]
+                } else {
+                    decode(input.get("blocks").cloned().unwrap_or(input))?
+                };
                 let (document, text) = super::wordcraft::build(&blocks)?;
                 let id = node.config["document_id"]
                     .as_str()

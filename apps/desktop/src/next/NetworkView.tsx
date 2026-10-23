@@ -14,60 +14,103 @@ import {
   type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Plus, Play, Save, Undo, Redo, Copy, Trash2 } from "lucide-react";
+import {
+  Play,
+  Save,
+  Undo,
+  Redo,
+  Copy,
+  Trash2,
+  Folder,
+  MousePointer2,
+} from "lucide-react";
 import { useWorkspace, row, call, Data, uid, download } from "./state";
-const kinds = [
-  "input",
-  "output",
-  "agent",
-  "process",
-  "file_read",
-  "folder_read",
-  "file_write",
-  "calendar_read",
-  "calendar_change",
-  "document_read",
-  "document_write",
-  "document_export",
-  "condition",
-  "parallel",
-  "join",
-  "loop",
-  "validate",
-  "approval",
-];
+import { catalog, groups, nodeSummary } from "./NodeCatalog";
+import { NodeProperties } from "./NodeProperties";
 function GraphNode({ data, selected }: NodeProps) {
   const d = data as Data;
+  const Icon = catalog[d.kind].icon;
   return (
-    <div className={`nx-graph-node ${selected ? "selected" : ""}`}>
-      <Handle type="target" position={Position.Left} id="in" />
-      <small>{d.kind.replaceAll("_", " ")}</small>
+    <div
+      className={`nx-graph-node ${d.kind === "process" ? "nx-process-node" : "nx-icon-node"} ${selected ? "selected" : ""}`}
+    >
+      {d.kind !== "input" && (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id="in"
+          title="Input · drag an output pin here"
+          aria-label={`${d.title} input`}
+        />
+      )}
+      <span className="nx-node-symbol">
+        <Icon size={d.kind === "process" ? 22 : 30} />
+      </span>
       <strong>{d.title}</strong>
+      <small>{d.summary}</small>
       {d.group && <small>{d.group}</small>}
+      {d.kind === "process" && d.config.operation === "select_fields" && (
+        <label className="nodrag nowheel">
+          Fields
+          <input
+            aria-label={`${d.title} fields`}
+            value={(d.config.fields || []).join(", ")}
+            onChange={(e) =>
+              d.update({
+                fields: e.target.value.split(",").map((s) => s.trim()),
+              })
+            }
+          />
+        </label>
+      )}
+      {d.kind === "process" && d.config.operation === "format_text" && (
+        <label className="nodrag nowheel">
+          Template
+          <input
+            aria-label={`${d.title} template`}
+            value={d.config.template || ""}
+            onChange={(e) => d.update({ template: e.target.value })}
+          />
+        </label>
+      )}
       {d.kind === "condition" ? (
         <>
           <Handle
             type="source"
             position={Position.Right}
             id="true"
+            title="Yes · condition matched"
+            aria-label={`${d.title} yes output`}
             style={{ top: "35%" }}
           />
           <Handle
             type="source"
             position={Position.Right}
             id="false"
+            title="No · condition did not match"
+            aria-label={`${d.title} no output`}
             style={{ top: "75%" }}
           />
+          <span className="nx-branch-label yes">Yes</span>
+          <span className="nx-branch-label no">No</span>
         </>
       ) : (
-        <Handle type="source" position={Position.Right} id="out" />
+        d.kind !== "output" && (
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="out"
+            title="Output · drag to another node's input"
+            aria-label={`${d.title} output`}
+          />
+        )
       )}
     </div>
   );
 }
 const nodeTypes = { workspace: GraphNode };
 const defaults: Record<string, Data> = {
-  input: { value: {} },
+  input: {},
   agent: {
     profile_id: "",
     system_prompt:
@@ -143,6 +186,7 @@ export function NetworkView({ id }: { id: string }) {
     [selected, setSelected] = useState(""),
     [config, setConfig] = useState("{}"),
     [filter, setFilter] = useState(""),
+    [libraryKind, setLibraryKind] = useState("agent"),
     [undo, setUndo] = useState<Data[]>([]),
     [redo, setRedo] = useState<Data[]>([]),
     [review, setReview] = useState<Data | null>(null),
@@ -154,12 +198,17 @@ export function NetworkView({ id }: { id: string }) {
     [connectTo, setConnectTo] = useState(""),
     [port, setPort] = useState("out"),
     [retry, setRetry] = useState<string[]>([]);
-  const [measured,setMeasured]=useState<Record<string,{width?:number;height?:number}>>({});
+  const [measured, setMeasured] = useState<
+    Record<string, { width?: number; height?: number }>
+  >({});
   const [canvasQuery, setCanvasQuery] = useState(""),
     [multi, setMulti] = useState<string[]>([]),
     [groupName, setGroupName] = useState("");
   const flow = useRef<ReactFlowInstance<Node, Edge> | null>(null),
     dragStart = useRef<Data | null>(null);
+  const canvas = useRef<HTMLDivElement>(null),
+    savedGraph = useRef(JSON.stringify(record?.value));
+  const initiallyPopulated = useRef(Boolean(record?.value.nodes.length));
   const selectedNode = graph.nodes.find((n: Data) => n.id === selected),
     runs = w.data.run
       .filter((r) => r.value.network_id === id)
@@ -170,6 +219,19 @@ export function NetworkView({ id }: { id: string }) {
     const t = setInterval(() => void w.refresh().catch(w.error), 750);
     return () => clearInterval(t);
   }, [running]);
+  useEffect(() => {
+    if (
+      record &&
+      record.revision !== revision &&
+      JSON.stringify(graph) === savedGraph.current
+    ) {
+      setGraph(structuredClone(record.value));
+      savedGraph.current = JSON.stringify(record.value);
+      setRevision(record.revision);
+      setUndo([]);
+      setRedo([]);
+    }
+  }, [record?.revision]);
   if (!record) return <p>Network not found.</p>;
   function change(next: Data) {
     setUndo([...undo.slice(-39), structuredClone(graph)]);
@@ -177,8 +239,9 @@ export function NetworkView({ id }: { id: string }) {
     setGraph(next);
     setValidation("");
   }
-  function select(id: string) {
+  function select(id: string, additive = false) {
     setSelected(id);
+    setMulti((previous) => (additive ? [...new Set([...previous, id])] : [id]));
     setConfig(
       JSON.stringify(
         graph.nodes.find((n: Data) => n.id === id)?.config || {},
@@ -190,30 +253,60 @@ export function NetworkView({ id }: { id: string }) {
   async function save() {
     const r = await w.save("network", graph, revision);
     setRevision(r.revision);
+    savedGraph.current = JSON.stringify(graph);
     return r;
   }
-  function node(kind: string) {
+  function updateConfig(nodeId: string, patch: Data) {
+    const target = graph.nodes.find((n: Data) => n.id === nodeId);
+    const config = Object.fromEntries(
+      Object.entries({ ...target.config, ...patch }).filter(
+        ([, value]) => value !== undefined,
+      ),
+    );
+    change({
+      ...graph,
+      nodes: graph.nodes.map((n: Data) =>
+        n.id === nodeId ? { ...n, config } : n,
+      ),
+    });
+    if (nodeId === selected) setConfig(JSON.stringify(config, null, 2));
+  }
+  function node(kind: string, position?: { x: number; y: number }) {
+    if (!catalog[kind]) return;
+    const bounds = canvas.current?.getBoundingClientRect();
     const n = {
       id: uid(),
       kind,
-      title: kind.replaceAll("_", " "),
+      title: catalog[kind].title,
       config: structuredClone(defaults[kind] || {}),
-      position: {
-        x: 100 + (graph.nodes.length % 3) * 260,
-        y: 80 + Math.floor(graph.nodes.length / 3) * 140,
-      },
+      position: position ||
+        flow.current?.screenToFlowPosition({
+          x: bounds ? bounds.left + bounds.width / 2 : window.innerWidth / 2,
+          y: bounds ? bounds.top + bounds.height / 2 : window.innerHeight / 2,
+        }) || {
+          x: 100 + (graph.nodes.length % 3) * 260,
+          y: 80 + Math.floor(graph.nodes.length / 3) * 140,
+        },
     };
     change({ ...graph, nodes: [...graph.nodes, n] });
     setSelected(n.id);
+    setMulti([n.id]);
     setConfig(JSON.stringify(n.config, null, 2));
   }
   const nodes: Node[] = graph.nodes.map((n: Data) => ({
     id: n.id,
     type: "workspace",
     position: n.position,
-    measured:measured[n.id],
-    data: { kind: n.kind, title: n.title, group: n.config.group || "" },
-    selected: multi.includes(n.id) || n.id === selected,
+    measured: measured[n.id],
+    data: {
+      kind: n.kind,
+      title: n.title,
+      group: n.config.group || "",
+      config: n.config,
+      summary: nodeSummary(n),
+      update: (patch: Data) => updateConfig(n.id, patch),
+    },
+    selected: multi.includes(n.id),
   }));
   const edges: Edge[] = graph.edges.map((e: Data) => ({
     id: e.id,
@@ -230,6 +323,28 @@ export function NetworkView({ id }: { id: string }) {
     targetHandle = "in",
   ) {
     if (!source || !target) return;
+    const reachable = new Set([target]);
+    let size = 0;
+    while (size !== reachable.size) {
+      size = reachable.size;
+      for (const edge of graph.edges)
+        if (reachable.has(edge.source)) reachable.add(edge.target);
+    }
+    if (reachable.has(source)) {
+      setValidation(
+        "This connection would create a cycle. Use a Repeat node for repetition.",
+      );
+      return;
+    }
+    if (
+      graph.edges.some(
+        (e: Data) =>
+          e.source === source &&
+          e.target === target &&
+          e.source_port === sourceHandle,
+      )
+    )
+      return;
     change({
       ...graph,
       edges: [
@@ -348,6 +463,7 @@ export function NetworkView({ id }: { id: string }) {
             onClick={() => {
               download("network-draft.json", graph);
               setGraph(structuredClone(record.value));
+              savedGraph.current = JSON.stringify(record.value);
               setRevision(record.revision);
               setUndo([]);
               setRedo([]);
@@ -393,31 +509,102 @@ export function NetworkView({ id }: { id: string }) {
       )}
       <div className="nx-graph-layout">
         <aside className="nx-palette">
+          <h2>Node library</h2>
+          <small>
+            Drag a node onto the canvas. Click to learn what it does.
+          </small>
           <input
             aria-label="Find node type"
             placeholder="Find a node"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
-          {kinds
-            .filter((k) =>
-              k.includes(filter.toLowerCase().replaceAll(" ", "_")),
-            )
-            .map((kind) => (
-              <button key={kind} onClick={() => node(kind)}>
-                <Plus size={12} />
-                {kind.replaceAll("_", " ")}
-              </button>
-            ))}
+          {groups.map((group) => {
+            const entries = Object.entries(catalog).filter(
+              ([kind, item]) =>
+                item.group === group &&
+                `${kind} ${item.title} ${item.description}`
+                  .toLowerCase()
+                  .includes(filter.toLowerCase()),
+            );
+            return (
+              entries.length > 0 && (
+                <details open key={group} className="nx-library-folder">
+                  <summary>
+                    <Folder size={15} />
+                    {group}
+                  </summary>
+                  {entries.map(([kind, item]) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={kind}
+                        draggable
+                        aria-pressed={libraryKind === kind}
+                        aria-label={item.title}
+                        title={item.description}
+                        onClick={() => setLibraryKind(kind)}
+                        onDragStart={(e) => {
+                          setLibraryKind(kind);
+                          e.dataTransfer.setData(
+                            "application/consilium-node",
+                            kind,
+                          );
+                          e.dataTransfer.effectAllowed = "copy";
+                        }}
+                      >
+                        <Icon size={20} />
+                        <span>{item.title}</span>
+                      </button>
+                    );
+                  })}
+                </details>
+              )
+            );
+          })}
+          <div className="nx-library-help">
+            <strong>{catalog[libraryKind].title}</strong>
+            <p>{catalog[libraryKind].description}</p>
+            <button onClick={() => node(libraryKind)}>
+              <MousePointer2 size={15} />
+              Place in canvas centre
+            </button>
+          </div>
           <button
             onClick={() =>
-              w.open("assistant", `network:${id}`, "Network assistant")
+              void save()
+                .then(() =>
+                  w.open("assistant", `network:${id}`, "Network assistant"),
+                )
+                .catch(w.error)
             }
           >
             Design with AI
           </button>
         </aside>
-        <div className="nx-canvas">
+        <div
+          className="nx-canvas"
+          ref={canvas}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const kind = e.dataTransfer.getData("application/consilium-node");
+            if (catalog[kind] && flow.current)
+              node(
+                kind,
+                flow.current.screenToFlowPosition({
+                  x: e.clientX,
+                  y: e.clientY,
+                }),
+              );
+          }}
+        >
+          <div className="nx-canvas-hint">
+            Drag nodes to move them · connect a right pin to a left pin
+          </div>
           <ReactFlow
             onInit={(instance) => {
               flow.current = instance;
@@ -425,15 +612,11 @@ export function NetworkView({ id }: { id: string }) {
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
-            onNodeClick={(_, n) => select(n.id)}
-            onSelectionChange={({ nodes }) =>
-              setMulti((previous) => {
-                const ids = nodes.map((n) => n.id);
-                return JSON.stringify(previous) === JSON.stringify(ids)
-                  ? previous
-                  : ids;
-              })
-            }
+            onNodeClick={(event, n) => select(n.id, event.shiftKey)}
+            onPaneClick={() => {
+              setSelected("");
+              setMulti([]);
+            }}
             onNodeDragStart={() => {
               dragStart.current = structuredClone(graph);
             }}
@@ -474,7 +657,17 @@ export function NetworkView({ id }: { id: string }) {
             }}
             onNodesChange={(changes) => {
               const next = applyNodeChanges(changes, nodes);
-              if(changes.some(c=>c.type==='dimensions'))setMeasured(previous=>({...previous,...Object.fromEntries(next.filter(n=>n.measured).map(n=>[n.id,n.measured!]))}));
+              if (changes.some((c) => c.type === "select"))
+                setMulti(next.filter((n) => n.selected).map((n) => n.id));
+              if (changes.some((c) => c.type === "dimensions"))
+                setMeasured((previous) => ({
+                  ...previous,
+                  ...Object.fromEntries(
+                    next
+                      .filter((n) => n.measured)
+                      .map((n) => [n.id, n.measured!]),
+                  ),
+                }));
               const update = {
                 ...graph,
                 nodes: next.map((n) => ({
@@ -508,7 +701,10 @@ export function NetworkView({ id }: { id: string }) {
                 c.targetHandle || "in",
               )
             }
-            fitView
+            fitView={initiallyPopulated.current}
+            fitViewOptions={{ maxZoom: 1, padding: 0.25 }}
+            connectionRadius={32}
+            defaultEdgeOptions={{ style: { strokeWidth: 2 } }}
             colorMode="dark"
             deleteKeyCode="Delete"
           >
@@ -569,60 +765,44 @@ export function NetworkView({ id }: { id: string }) {
                   }
                 />
               </label>
-              {selectedNode.kind === "agent" && (
+              <NodeProperties
+                node={selectedNode}
+                update={(patch) => updateConfig(selected, patch)}
+              />
+              <details className="nx-advanced">
+                <summary>Advanced node settings</summary>
                 <label>
-                  Model profile
-                  <select
-                    value={selectedNode.config.profile_id || ""}
-                    onChange={(e) => {
-                      const c = {
-                        ...selectedNode.config,
-                        profile_id: e.target.value,
-                      };
+                  Configuration JSON
+                  <textarea
+                    rows={15}
+                    value={config}
+                    onChange={(e) => setConfig(e.target.value)}
+                  />
+                </label>
+                <button
+                  onClick={() => {
+                    try {
+                      const parsed = JSON.parse(config);
+                      if (
+                        !parsed ||
+                        typeof parsed !== "object" ||
+                        Array.isArray(parsed)
+                      )
+                        throw Error("Configuration must be a JSON object.");
                       change({
                         ...graph,
                         nodes: graph.nodes.map((n: Data) =>
-                          n.id === selected ? { ...n, config: c } : n,
+                          n.id === selected ? { ...n, config: parsed } : n,
                         ),
                       });
-                      setConfig(JSON.stringify(c, null, 2));
-                    }}
-                  >
-                    <option value="">Choose a profile</option>
-                    {w.data.profile.map((r) => (
-                      <option key={r.value.id} value={r.value.id}>
-                        {r.value.name} · {r.value.model}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <label>
-                Configuration JSON
-                <textarea
-                  rows={15}
-                  value={config}
-                  onChange={(e) => setConfig(e.target.value)}
-                />
-              </label>
-              <button
-                onClick={() => {
-                  try {
-                    change({
-                      ...graph,
-                      nodes: graph.nodes.map((n: Data) =>
-                        n.id === selected
-                          ? { ...n, config: JSON.parse(config) }
-                          : n,
-                      ),
-                    });
-                  } catch (e) {
-                    w.error(e);
-                  }
-                }}
-              >
-                Apply configuration
-              </button>
+                    } catch (e) {
+                      w.error(e);
+                    }
+                  }}
+                >
+                  Apply configuration
+                </button>
+              </details>
               <div className="nx-actions">
                 <button
                   onClick={() =>
@@ -667,83 +847,89 @@ export function NetworkView({ id }: { id: string }) {
           ) : (
             <p>Select a node to edit its configuration.</p>
           )}
-          <details>
-            <summary>Resource references</summary>
-            {["binding", "profile", "calendar", "document"].map((kind) => (
-              <div key={kind}>
-                <h3>{kind}</h3>
-                {w.data[kind].map((r) => (
-                  <div key={r.value.id}>
-                    <strong>{r.value.name || r.value.title}</strong>
-                    <input
-                      readOnly
-                      aria-label={`${r.value.name || r.value.title} reference`}
-                      value={r.value.id}
-                    />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </details>
-          <details>
-            <summary>Connect with keyboard</summary>
-            <label>
-              From
-              <select
-                value={connectFrom}
-                onChange={(e) => setConnectFrom(e.target.value)}
-              >
-                <option value="">Select</option>
-                {graph.nodes.map((n: Data) => (
-                  <option key={n.id} value={n.id}>
-                    {n.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Output
-              <select value={port} onChange={(e) => setPort(e.target.value)}>
-                {["out", "true", "false"].map((p) => (
-                  <option key={p}>{p}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              To
-              <select
-                value={connectTo}
-                onChange={(e) => setConnectTo(e.target.value)}
-              >
-                <option value="">Select</option>
-                {graph.nodes.map((n: Data) => (
-                  <option key={n.id} value={n.id}>
-                    {n.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button onClick={() => connect(connectFrom, connectTo, port)}>
-              Connect
-            </button>
-          </details>
-          <details>
-            <summary>Run limits</summary>
-            {Object.keys(graph.limits).map((k) => (
-              <label key={k}>
-                {k.replaceAll("_", " ")}
-                <input
-                  type="number"
-                  value={graph.limits[k]}
-                  onChange={(e) =>
-                    change({
-                      ...graph,
-                      limits: { ...graph.limits, [k]: Number(e.target.value) },
-                    })
-                  }
-                />
+          <details className="nx-advanced">
+            <summary>Advanced network settings</summary>
+            <details>
+              <summary>Resource references</summary>
+              {["binding", "profile", "calendar", "document"].map((kind) => (
+                <div key={kind}>
+                  <h3>{kind}</h3>
+                  {w.data[kind].map((r) => (
+                    <div key={r.value.id}>
+                      <strong>{r.value.name || r.value.title}</strong>
+                      <input
+                        readOnly
+                        aria-label={`${r.value.name || r.value.title} reference`}
+                        value={r.value.id}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </details>
+            <details>
+              <summary>Connect with keyboard</summary>
+              <label>
+                From
+                <select
+                  value={connectFrom}
+                  onChange={(e) => setConnectFrom(e.target.value)}
+                >
+                  <option value="">Select</option>
+                  {graph.nodes.map((n: Data) => (
+                    <option key={n.id} value={n.id}>
+                      {n.title}
+                    </option>
+                  ))}
+                </select>
               </label>
-            ))}
+              <label>
+                Output
+                <select value={port} onChange={(e) => setPort(e.target.value)}>
+                  {["out", "true", "false"].map((p) => (
+                    <option key={p}>{p}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                To
+                <select
+                  value={connectTo}
+                  onChange={(e) => setConnectTo(e.target.value)}
+                >
+                  <option value="">Select</option>
+                  {graph.nodes.map((n: Data) => (
+                    <option key={n.id} value={n.id}>
+                      {n.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button onClick={() => connect(connectFrom, connectTo, port)}>
+                Connect
+              </button>
+            </details>
+            <details>
+              <summary>Run limits</summary>
+              {Object.keys(graph.limits).map((k) => (
+                <label key={k}>
+                  {k.replaceAll("_", " ")}
+                  <input
+                    type="number"
+                    value={graph.limits[k]}
+                    onChange={(e) =>
+                      change({
+                        ...graph,
+                        limits: {
+                          ...graph.limits,
+                          [k]: Number(e.target.value),
+                        },
+                      })
+                    }
+                  />
+                </label>
+              ))}
+            </details>
           </details>
         </aside>
       </div>
@@ -925,25 +1111,79 @@ export function NetworkView({ id }: { id: string }) {
                   Graph revision {review.plan.revision} ·{" "}
                   {review.approval_digest.slice(0, 12)}
                 </small>
-                <pre>
-                  {JSON.stringify(
-                    {
-                      nodes: review.plan.network.nodes,
-                      resources: review.resources,
-                      limits: review.plan.network.limits,
-                    },
-                    null,
-                    2,
-                  )}
-                </pre>
-                <label>
-                  Run input · JSON
-                  <textarea
-                    rows={3}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                  />
-                </label>
+                <h3>Steps in this run</h3>
+                {review.plan.network.nodes.map((n: Data) => (
+                  <div key={n.id} className="nx-review-step">
+                    <strong>{n.title}</strong>
+                    <p>{catalog[n.kind]?.description}</p>
+                    {n.kind === "agent" && (
+                      <p>
+                        Model:{" "}
+                        {
+                          review.resources[`profile:${n.config.profile_id}`]
+                            ?.value.provider
+                        }{" "}
+                        ·{" "}
+                        {
+                          review.resources[`profile:${n.config.profile_id}`]
+                            ?.value.model
+                        }
+                      </p>
+                    )}
+                    {n.kind === "process" &&
+                      (!n.config.operation ||
+                        n.config.operation === "script") && (
+                        <details open>
+                          <summary>Review program</summary>
+                          <pre>
+                            {n.config.script_binding
+                              ? review.resources[
+                                  `script:${n.config.script_binding}`
+                                ]
+                              : n.config.source}
+                          </pre>
+                        </details>
+                      )}
+                  </div>
+                ))}
+                <h3>Linked resources</h3>
+                {Object.entries(review.resources as Record<string, Data>)
+                  .filter(([key]) => !key.startsWith("script:"))
+                  .map(([key, r]) => (
+                    <p key={key}>
+                      <strong>{r.value.name || r.value.title}</strong>
+                      {r.value.path ? ` · ${r.value.path}` : ""}
+                      {r.value.writable ? " · May write" : ""}
+                    </p>
+                  ))}
+                <p>
+                  Run limit:{" "}
+                  {Math.round(review.plan.network.limits.timeout_seconds / 60)}{" "}
+                  minutes · {review.plan.network.limits.model_calls} model
+                  requests
+                </p>
+                <details className="nx-advanced">
+                  <summary>Advanced run details & input</summary>
+                  <pre>
+                    {JSON.stringify(
+                      {
+                        nodes: review.plan.network.nodes,
+                        resources: review.resources,
+                        limits: review.plan.network.limits,
+                      },
+                      null,
+                      2,
+                    )}
+                  </pre>
+                  <label>
+                    Run input · JSON
+                    <textarea
+                      rows={3}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                    />
+                  </label>
+                </details>
                 <label className="nx-check">
                   <input
                     type="checkbox"

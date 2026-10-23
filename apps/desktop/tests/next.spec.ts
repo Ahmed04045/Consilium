@@ -1,4 +1,9 @@
 import { test, expect } from "@playwright/test";
+test.beforeEach(async ({ page }) => {
+  page.on("pageerror", (error) =>
+    console.error("Browser exception:", error.message),
+  );
+});
 test("Home is empty, tabs retain drafts, and calendar creation has an explicit destination", async ({
   page,
 }) => {
@@ -134,8 +139,10 @@ test("network canvas measures nodes, searches, groups and retains edits", async 
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page
     .locator(".nx-palette")
-    .getByRole("button", { name: "input", exact: true })
+    .getByRole("button", { name: "Input", exact: true })
     .click();
+  await expect(page.locator(".nx-graph-node")).toHaveCount(0);
+  await page.getByRole("button", { name: "Place in canvas centre" }).click();
   await expect(page.locator(".nx-graph-node")).toBeVisible();
   await page.getByLabel("Title", { exact: true }).fill("Reading input");
   await page.getByLabel("Search this network").fill("Reading");
@@ -151,4 +158,65 @@ test("network canvas measures nodes, searches, groups and retains edits", async 
   await page.getByRole("tab", { name: "Home", exact: true }).click();
   await page.getByRole("tab", { name: "Graph checks", exact: true }).click();
   await expect(page.locator(".nx-graph-node")).toContainText("Reading input");
+});
+
+test("library drag placement, visible pins and process properties work without JSON", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Home", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Control+n");
+  await page.getByRole("button", { name: "Network", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Drag workflow");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  const palette = page.locator(".nx-palette"),
+    canvas = page.locator(".nx-canvas");
+  await palette
+    .getByRole("button", { name: "Input", exact: true })
+    .dragTo(canvas, { targetPosition: { x: 45, y: 100 } });
+  await palette
+    .getByRole("button", { name: "Output", exact: true })
+    .dragTo(canvas, { targetPosition: { x: 280, y: 170 } });
+  await expect(page.locator(".nx-icon-node")).toHaveCount(2);
+  const source = page.getByLabel("Input output", { exact: true }),
+    target = page.getByLabel("Output input", { exact: true });
+  expect((await source.boundingBox())!.width).toBeGreaterThanOrEqual(16);
+  await page.screenshot({
+    path: "../../docs/screenshots/next-editor-interactions.png",
+  });
+  await source.dragTo(target);
+  await expect(page.locator(".react-flow__edge")).toHaveCount(1);
+  const inputNode = page
+    .locator(".react-flow__node")
+    .filter({ has: page.getByText("Input", { exact: true }).first() })
+    .first();
+  const before = await inputNode.getAttribute("style");
+  const box = await inputNode.locator("strong").boundingBox();
+  await page.mouse.move(box!.x + 15, box!.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + 55, box!.y + 45, { steps: 8 });
+  await page.mouse.up();
+  await expect(inputNode).not.toHaveAttribute("style", before!);
+  await palette.getByRole("button", { name: "Process", exact: true }).click();
+  await page.getByRole("button", { name: "Place in canvas centre" }).click();
+  await page
+    .getByLabel("Operation", { exact: true })
+    .selectOption("select_fields");
+  await page
+    .getByLabel("Fields to keep", { exact: true })
+    .fill("title, summary");
+  await expect(page.getByLabel("Process fields", { exact: true })).toHaveValue(
+    "title, summary",
+  );
+  await expect(
+    page.getByLabel("Configuration JSON", { exact: true }),
+  ).not.toBeVisible();
+  await page.getByRole("button", { name: "Design with AI" }).click();
+  await expect(
+    page.getByText("Build & discuss network", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Mode", { exact: true })).toHaveCount(0);
 });

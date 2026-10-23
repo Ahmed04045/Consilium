@@ -287,6 +287,17 @@ try {
     },
   ])
     await save("binding", b);
+  const scriptNode = codeData.nodes.find((n) => n.kind === "process");
+  writeFileSync(join(root, "program.js"), scriptNode.config.source);
+  await save("binding", {
+    id: "fixture-script",
+    name: "Program file",
+    kind: "file",
+    path: join(root, "program.js"),
+    writable: false,
+  });
+  scriptNode.config.script_binding = "fixture-script";
+  delete scriptNode.config.source;
   for (const graph of [learning, codeData]) await save("network", graph);
   for (const graph of [learning, codeData]) {
     const review = await rpc("next_network_review", { id: graph.id });
@@ -389,6 +400,82 @@ try {
     }
   }
   assert.equal((await cliCall(["runs"])).length, 4);
+  await save("network", {
+    schema_version: 1,
+    id: "simple-processes",
+    name: "Simple operations",
+    limits: learning.limits,
+    nodes: [
+      {
+        id: "input",
+        kind: "input",
+        title: "Input",
+        config: {},
+        position: { x: 0, y: 0 },
+      },
+      {
+        id: "keep",
+        kind: "process",
+        title: "Keep fields",
+        config: { operation: "select_fields", fields: ["title"] },
+        position: { x: 220, y: 0 },
+      },
+      {
+        id: "format",
+        kind: "process",
+        title: "Format",
+        config: { operation: "format_text", template: "Result: {{title}}" },
+        position: { x: 440, y: 0 },
+      },
+      {
+        id: "output",
+        kind: "output",
+        title: "Output",
+        config: {},
+        position: { x: 660, y: 0 },
+      },
+      {
+        id: "document",
+        kind: "document_write",
+        title: "Save formatted text",
+        config: { title: "Simple process report" },
+        position: { x: 660, y: 180 },
+      },
+    ],
+    edges: [
+      ["input", "keep"],
+      ["keep", "format"],
+      ["format", "output"],
+      ["format", "document"],
+    ].map(([source, target], i) => ({
+      id: `simple-${i}`,
+      source,
+      target,
+      source_port: "out",
+      target_port: "in",
+    })),
+  });
+  const simpleReview = await rpc("next_network_review", {
+    id: "simple-processes",
+  });
+  const simpleRun = await rpc("next_network_run", {
+    network_id: "simple-processes",
+    revision: simpleReview.plan.revision,
+    approval_digest: simpleReview.approval_digest,
+    input: { title: "Example", private: "omit" },
+  });
+  assert.equal(simpleRun.status, "completed");
+  assert.deepEqual(simpleRun.nodes.keep.output, { title: "Example" });
+  assert.equal(simpleRun.nodes.output.output, "Result: Example");
+  assert.equal(
+    (
+      await rpc("next_get", {
+        kind: "document",
+        id: simpleRun.nodes.document.output.document_id,
+      })
+    ).value.text.trim(),
+    "Result: Example",
+  );
 
   await save("network", {
     schema_version: 1,
@@ -402,7 +489,7 @@ try {
     id: "network-thread",
     title: "Design a network",
     scope: "network:ai-network",
-    mode: "network_creation",
+    mode: "schedule_chat", // Legacy network threads must route to graph authoring.
     profile_id: "fixture-profile",
     messages: [],
     summary: "",
@@ -415,6 +502,13 @@ try {
     request: "Draft a simple input/output workflow.",
   });
   mode = "normal";
+  const networkRequest = JSON.parse(requests.at(-1).messages.at(-1).content);
+  assert.equal(networkRequest.context.mode, "network_creation");
+  assert(
+    requests
+      .at(-1)
+      .messages[0].content.includes("You CAN create and revise graphs"),
+  );
   const proposed = (
     await rpc("next_get", { kind: "thread", id: "network-thread" })
   ).value.messages.at(-1).proposal_id;
@@ -434,9 +528,10 @@ try {
   const exported = readFileSync(packagePath, "utf8");
   assert(!exported.includes(root));
   assert(!exported.includes("credential_id"));
+  const runCountBeforeImport = (await cliCall(["runs"])).length;
   const imported = await cliCall(["import", packagePath]);
   assert.notEqual(imported.value.id, learning.id);
-  assert.equal((await cliCall(["runs"])).length, 4);
+  assert.equal((await cliCall(["runs"])).length, runCountBeforeImport);
 
   const study = (await rpc("next_snapshot")).document.find(
     (r) => r.value.title === "Synthetic study guide",
@@ -515,7 +610,11 @@ try {
   await page.screenshot({ path: "../../docs/screenshots/next-document.png" });
   await page.evaluate(() =>
     document.querySelector("iframe").contentWindow.postMessage(
-      { source: "consilium-host", kind: "insert_text", payload: " Saved while switching tabs." },
+      {
+        source: "consilium-host",
+        kind: "insert_text",
+        payload: " Saved while switching tabs.",
+      },
       location.origin,
     ),
   );
@@ -549,16 +648,14 @@ try {
     .locator("#status")
     .waitFor({ state: "detached", timeout: 60000 });
   await page.evaluate(() =>
-    document
-      .querySelector("iframe")
-      .contentWindow.postMessage(
-        {
-          source: "consilium-host",
-          kind: "insert_text",
-          payload: " Saved while closing.",
-        },
-        location.origin,
-      ),
+    document.querySelector("iframe").contentWindow.postMessage(
+      {
+        source: "consilium-host",
+        kind: "insert_text",
+        payload: " Saved while closing.",
+      },
+      location.origin,
+    ),
   );
   const taskCount = (await rpc("next_snapshot")).task.length;
   const exited = new Promise((resolve) => child.once("exit", resolve));

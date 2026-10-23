@@ -24,7 +24,13 @@ The full history remains local. Each request uses the selected scope, current pr
 
 ## Networks
 
-Add nodes from the palette, connect handles or use Connect with keyboard, then configure the inspector. Search locates existing nodes. Shift-select nodes and assign a group to move them together. Configuration is JSON in this alpha, with profile selectors and copyable resource references. Save, Validate, then Review & run.
+Drag nodes from the grouped Node library onto the canvas. Clicking a library item shows its explanation; Place in canvas centre is the keyboard alternative. Drag an icon or process block to move it. Drag a right output pin to another node's left input pin. Conditions have separate Yes and No outputs. The inspector provides model, file, calendar, document and process controls. JSON contracts, nested loop definitions, resource IDs and keyboard connection controls live under Advanced. Save, Validate, then Review & run.
+
+Simple Process operations keep selected fields or format text using placeholders such as `{{title}}` and `{{input}}`; these need no installed runtime. Their properties also appear inside the process block. For code, select Run a program, an installed runtime and Python or JavaScript. Write source in the editor or select a read-only program file binding. JSON arrives on stdin and must be printed to stdout. Review captures linked program source; changing that file invalidates the previous run approval. Execution uses the reviewed copy. Program imports and external dependencies still need to be available to the configured runtime.
+
+A process can transform a read file and send its result to Write file. To edit a calendar, return `{"changes":[...]}` with revision-checked Change records and connect Propose calendar changes; the user accepts the resulting proposal. A text result can connect directly to Write document, while structured headings/lists/tables use a blocks array. Selecting an existing document captures its revision, so newer edits are protected from overwrite.
+
+Network assistant conversations automatically use Build & discuss network. A request to change the graph should produce a proposal, while questions can receive a conversational answer. Accepted proposals refresh a clean open canvas; unsaved graph edits are preserved with a load-new-revision choice. Real-model output remains subject to validation and may need retry.
 
 Create local bindings in Settings for input files, folders, installed runtimes and writable output files. Bindings have logical IDs; paths stay on the current device. Imported graphs need their logical profile/resource references rebound through the inspector. Imports never start automatically.
 
@@ -70,4 +76,4 @@ Create backup saves Markdown and a consistent SQLite snapshot. Export local reco
 
 ## Current release boundary
 
-This is a development preview. Both acceptance workflows use a deterministic local provider to verify routing, validation and persistence; that does not establish the quality of every real Gemini/OpenRouter/local model. Real-provider trials, longer normal use and clean-machine installer checks remain release gates. Workflow setup still exposes configuration JSON. Live collaboration, scheduled triggers and other Craft add-ons are intentionally deferred.
+This is a development preview. Both acceptance workflows use a deterministic local provider to verify routing, validation and persistence; that does not establish the quality of every real Gemini/OpenRouter/local model. Real-provider trials, longer normal use and clean-machine installer checks remain release gates. JSON schemas and nested loop bodies still use Advanced configuration. Live collaboration, scheduled triggers and other Craft add-ons are intentionally deferred.

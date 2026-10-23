@@ -140,7 +140,13 @@ fn compile_depth(n: &NetworkDefinition, revision: i64, depth: usize) -> Result<C
         );
         let required = match node.kind.as_str() {
             "agent" => vec!["profile_id", "system_prompt"],
-            "process" => vec!["executable_binding", "source"],
+            "process" if node.config["operation"].as_str().unwrap_or("script") == "script" => {
+                if node.config.get("script_binding").is_some() {
+                    vec!["executable_binding", "script_binding"]
+                } else {
+                    vec!["executable_binding", "source"]
+                }
+            }
             "file_read" | "folder_read" | "file_write" => vec!["binding_id"],
             "calendar_read" | "calendar_change" => vec!["calendar_id"],
             "document_read" | "document_export" => vec!["document_id"],
@@ -156,10 +162,34 @@ fn compile_depth(n: &NetworkDefinition, revision: i64, depth: usize) -> Result<C
             );
         }
         if node.kind == "process" {
+            let operation = node.config["operation"].as_str().unwrap_or("script");
             ensure!(
-                node.config["source"].as_str().unwrap().len() <= 100000,
+                ["script", "select_fields", "format_text"].contains(&operation),
+                "Unknown process operation"
+            );
+            ensure!(
+                node.config["source"].as_str().unwrap_or("").len() <= 100000,
                 "Script source exceeds 100 KB"
             );
+            if operation == "select_fields" {
+                ensure!(
+                    node.config["fields"]
+                        .as_array()
+                        .is_some_and(|fields| !fields.is_empty()
+                            && fields
+                                .iter()
+                                .all(|v| v.as_str().is_some_and(|s| !s.trim().is_empty()))),
+                    "Choose at least one field to keep"
+                );
+            }
+            if operation == "format_text" {
+                ensure!(
+                    node.config["template"]
+                        .as_str()
+                        .is_some_and(|s| !s.is_empty() && s.len() <= 100000),
+                    "Enter a text template of at most 100 KB"
+                );
+            }
             if let Some(args) = node.config.get("args") {
                 ensure!(
                     args.as_array()
@@ -209,6 +239,7 @@ fn compile_depth(n: &NetworkDefinition, revision: i64, depth: usize) -> Result<C
                 .unwrap_or(match source.kind.as_str() {
                     "agent" if source.config.get("schema").is_none() => "text",
                     "file_read" if source.config["format"] != "json" => "text",
+                    "process" if source.config["operation"] == "format_text" => "text",
                     _ => "json",
                 });
         let input_type = target.config["input_type"].as_str().unwrap_or("any");

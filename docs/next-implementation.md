@@ -1,6 +1,6 @@
 # Consilium Next implementation and verification
 
-Updated 2026-10-22. Version **3.0.0-alpha.1**, unsigned development preview.
+Updated 2026-10-23. Version **3.0.0-alpha.2**, unsigned development preview.
 
 Baseline: commit `258765e`, branch `preview/2.0-alpha.4`. Development branch: `next-workspaces`. The preview executable, installer, vault and credential namespace are preserved.
 
@@ -23,6 +23,15 @@ Baseline: commit `258765e`, branch `preview/2.0-alpha.4`. Development branch: `n
 
 ## Verification evidence
 
+### Alpha.2 usability update
+
+- Node library folders, icon nodes, drag placement, visible pins, movement, inline process fields and network-only assistant controls are covered by **5 passing Next browser tests**.
+- The application/workflow suites pass **37 tests**, including simple process operations, missing-field failures, linked program source snapshots, changed-code approval invalidation and correction of legacy network thread modes.
+- Readable property controls cover model instructions, files/folders, calendars, documents, program source and simple transformations. Full configuration, loop bodies and output schemas remain under Advanced.
+- Native acceptance additionally checks linked JavaScript files through desktop and CLI, simple field selection/text formatting, plain-text Wordcraft output and the network assistant's effective mode and authoring instructions. Model responses are synthetic; live-provider proposal quality still needs normal use.
+
+### Foundation verification (alpha.1)
+
 - Rust: **69 passed**, **2 intentionally ignored** (optional real Windows Credential Manager roundtrip and historical 10,000-note performance baseline). Covers domain rules, Gemini schema adaptation, retries/cancellation, storage restoration, label migration, stale proposals, series splitting, loops, native Node execution and persistent model budgets.
 - Browser: the original 12 preview regressions plus 4 Next workspace/editor tests pass. Includes label isolation, retained settings drafts, direct title-bar search, dialog overflow, Home keyboard resizing and graph measurement/search/grouping.
 - Native acceptance: isolated temporary vault and local deterministic Ollama-compatible provider; no personal keys or data. Learning creates a Wordcraft study document, reviewed weekly span, recurring sessions and dated children. Code/data runs Node on synthetic JSON, validates and branches, interprets through an agent, and writes a report/artifact. Both workflows also run through the CLI while desktop remains open.
@@ -35,7 +44,7 @@ Baseline: commit `258765e`, branch `preview/2.0-alpha.4`. Development branch: `n
 - No cloud account, live collaboration, scheduled network triggers, extra Craft applications or model training.
 - Native scripts are trusted code with the user's OS permissions. Job Objects manage ordinary child processes and do not isolate filesystem/network access.
 - Profile credentials are not migrated from the old preview namespace. Re-enter named keys and select profiles for imported conversations.
-- Configuration JSON is exposed for advanced nodes and loop bodies in this alpha. Logical bindings must be assigned on each device.
+- JSON is available under Advanced for custom contracts and nested loop bodies. Logical bindings must be assigned on each device.
 - Run outputs/history and recovery archives remain plaintext local data. Authored scripts and prompts are intentionally included in graph exports; inspect them before sharing.
 
 ## Reproduction

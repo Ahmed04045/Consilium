@@ -2,7 +2,7 @@
 
 A local Windows workspace for calendars, documents, conversations and visual AI workflows. Built with Tauri 2, Rust, React, SQLite, React Flow and the bundled Wordcraft editor.
 
-Current development release: **3.0.0-alpha.1 — unsigned preview**. Consilium Next has a separate application identity, vault and credential namespace. The previous daily-use preview is preserved at commit `258765e` on `preview/2.0-alpha.4`; this work is on `next-workspaces`.
+Current development release: **3.0.0-alpha.2 — unsigned preview**. Consilium Next has a separate application identity, vault and credential namespace. The previous daily-use preview is preserved at commit `258765e` on `preview/2.0-alpha.4`; this work is on `next-workspaces`.
 
 ## Start here
 
@@ -11,7 +11,7 @@ Current development release: **3.0.0-alpha.1 — unsigned preview**. Consilium N
 - [Release notes](docs/next-release-notes.md)
 - [Wordcraft licensing and build details](docs/wordcraft-integration.md)
 
-Build artifacts: `target/release/consilium-next.exe`, terminal client `target/release/consilium.exe`, and `target/release/bundle/nsis/Consilium Next_3.0.0-alpha.1_x64-setup.exe`. The installer includes the terminal client in its `cli` directory. It does not add it to PATH.
+Build artifacts: `target/release/consilium-next.exe`, terminal client `target/release/consilium.exe`, and `target/release/bundle/nsis/Consilium Next_3.0.0-alpha.2_x64-setup.exe`. The installer includes the terminal client in its `cli` directory. It does not add it to PATH.
 
 ## Build and verify
 
