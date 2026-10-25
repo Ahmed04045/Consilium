@@ -1,0 +1,32 @@
+{
+  "format": "consilium-addon",
+  "version": 1,
+  "id": "godot-scene",
+  "name": "Godot: generate a scene",
+  "description": "Generate a PackedScene containing platform meshes with the installed Godot console executable.",
+  "runtime": "godot",
+  "source": "extends SceneTree\nfunc _initialize():\n    var input = JSON.parse_string(OS.read_string_from_stdin())\n    if not input is Dictionary:\n        printerr(\"Input must be an object\")\n        quit(1)\n        return\n    var count = clampi(int(input.get(\"count\", 8)), 1, 100)\n    var root = Node3D.new()\n    root.name = \"GeneratedLevel\"\n    for i in range(count):\n        var tile = MeshInstance3D.new()\n        tile.name = \"Platform\" + str(i)\n        tile.mesh = BoxMesh.new()\n        tile.position = Vector3(i * 2.0, 0, (i % 3) * 2.0)\n        root.add_child(tile)\n        tile.owner = root\n    var packed = PackedScene.new()\n    if packed.pack(root) != OK or ResourceSaver.save(packed, \"res://generated.tscn\") != OK:\n        root.free()\n        quit(1)\n        return\n    var output = {\"scene_text\":FileAccess.get_file_as_string(\"res://generated.tscn\"),\"platforms\":count,\"blocks\":[{\"kind\":\"heading\",\"level\":1,\"text\":\"Generated Godot scene\"},{\"kind\":\"paragraph\",\"text\":str(count)+\" platform meshes packed into generated.tscn. Connect scene_text through a process to a Write file node to save it into your own project.\"}]}\n    print(\"CONSILIUM_RESULT:\" + JSON.stringify(output))\n    root.free()\n    quit()\n",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "count": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      }
+    },
+    "required": [
+      "count"
+    ],
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "blocks"
+    ]
+  },
+  "capabilities": [
+    "filesystem:run-directory"
+  ]
+}

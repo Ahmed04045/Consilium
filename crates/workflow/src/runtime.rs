@@ -409,7 +409,7 @@ async fn execute_owned(
             let calls = calls.clone();
             let step_store = store.clone();
             jobs.spawn(async move {
-                let timeout = if node.kind == "process" {
+                let timeout = if node.kind == "process" || node.kind == "addon" {
                     node.config["timeout_seconds"]
                         .as_u64()
                         .unwrap_or(300)
@@ -550,7 +550,7 @@ fn eval(
                             store.write(&step_key, existing.map_or(0, |r| r.revision), &step)?;
                         let mut execution_node = n.clone();
                         execution_node.id = format!("step-{}", digest(&step_path)?);
-                        let timeout = if n.kind == "process" {
+                        let timeout = if matches!(n.kind.as_str(), "process" | "addon") {
                             n.config["timeout_seconds"]
                                 .as_u64()
                                 .unwrap_or(300)

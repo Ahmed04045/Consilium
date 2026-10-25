@@ -107,16 +107,26 @@ pub async fn execute(
 ) -> Result<Value> {
     ensure!(executable.is_file(), "Configured executable is unavailable");
     ensure!(
-        ["py", "js", "mjs", "txt"].contains(&extension),
-        "Choose py, js, mjs or txt script format"
+        ["py", "js", "mjs", "txt", "gd"].contains(&extension),
+        "Choose py, js, mjs, gd or txt script format"
     );
     tokio::fs::create_dir_all(directory).await?;
+    if extension == "gd" {
+        tokio::fs::write(
+            directory.join("project.godot"),
+            "config_version=5\n[application]\nconfig/name=\"Consilium run\"\n",
+        )
+        .await?;
+    }
     let script = tempfile::Builder::new()
         .prefix("script-")
         .suffix(&format!(".{extension}"))
         .tempfile_in(directory)?;
     tokio::fs::write(script.path(), source).await?;
     let mut command = tokio::process::Command::new(executable);
+    if extension == "gd" {
+        command.arg("--path").arg(directory);
+    }
     command
         .args(args)
         .arg(script.path())
@@ -149,6 +159,7 @@ pub async fn execute(
         bounded(stderr),
         async {
             stdin.write_all(&bytes).await?;
+            stdin.write_all(b"\n").await?;
             stdin.shutdown().await?;
             drop(stdin);
             Ok::<_, anyhow::Error>(())
@@ -161,5 +172,17 @@ pub async fn execute(
             .code()
             .map_or("no exit code".into(), |n| n.to_string())
     );
+    if extension == "gd" {
+        let text = std::str::from_utf8(&out)?;
+        let outputs = text
+            .lines()
+            .filter_map(|s| s.strip_prefix("CONSILIUM_RESULT:"))
+            .collect::<Vec<_>>();
+        ensure!(
+            outputs.len() == 1,
+            "Godot must print exactly one CONSILIUM_RESULT: JSON line"
+        );
+        return serde_json::from_str(outputs[0]).context("Godot result is not valid JSON");
+    }
     serde_json::from_slice(&out).context("Process stdout must contain one JSON value")
 }

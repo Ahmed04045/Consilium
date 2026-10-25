@@ -336,6 +336,8 @@ fn main() {
             };
             let engine = Engine::new(Store::new(root)?);
             let worker = engine.clone();
+            let scheduler = engine.clone();
+            let scheduler_handle = app.handle().clone();
             let handle = app.handle().clone();
             app.manage(State {
                 engine,
@@ -347,6 +349,17 @@ fn main() {
                         let _ = handle.emit("index-progress", ());
                     }
                     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                }
+            });
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    match scheduler.automation_tick().await {
+                        Ok(value) if !value.is_null() => {
+                            let _ = scheduler_handle.emit("automation-progress", value);
+                        }
+                        _ => {}
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
                 }
             });
             Ok(())

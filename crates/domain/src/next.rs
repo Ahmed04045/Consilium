@@ -33,7 +33,7 @@ pub enum TaskKind {
     Flexible,
     Goal,
 }
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Step {
     pub id: String,
@@ -77,6 +77,7 @@ pub struct Task {
     pub unit: String,
     pub recurrence: Option<Recurrence>,
     pub deleted: bool,
+    pub archived: bool,
 }
 impl Default for Task {
     fn default() -> Self {
@@ -101,6 +102,7 @@ impl Default for Task {
             unit: String::new(),
             recurrence: None,
             deleted: false,
+            archived: false,
         }
     }
 }

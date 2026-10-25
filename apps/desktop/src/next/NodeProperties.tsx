@@ -113,7 +113,7 @@ export function NodeProperties({
   return (
     <div className="nx-node-properties">
       <p>{catalog[kind]?.description}</p>
-      {kind === "agent" && (
+      {(kind === "agent" || kind === "planner") && (
         <>
           {choose("Model profile", "profile_id", "profile")}
           <label>
@@ -124,10 +124,70 @@ export function NodeProperties({
               onChange={(e) => update({ system_prompt: e.target.value })}
             />
           </label>
+          <label className="nx-check">
+            <input
+              type="checkbox"
+              checked={!!c.include_goal_context}
+              onChange={(e) =>
+                update({
+                  include_goal_context: e.target.checked,
+                  calendar_id: undefined,
+                })
+              }
+            />{" "}
+            Include goal context
+          </label>
+          {c.include_goal_context &&
+            choose("Context calendar", "calendar_id", "calendar")}
           <small>
-            Text output by default. Set a JSON output schema under Advanced when
-            the next node needs structured data.
+            {kind === "planner"
+              ? "Returns a JSON network proposal. Connect to Propose network changes for validation and review."
+              : "Text output by default. Set a JSON output schema under Advanced when the next node needs structured data."}
           </small>
+        </>
+      )}
+      {kind === "addon" && (
+        <>
+          {choose("Installed add-on", "addon_id", "addon", (a) => a.enabled)}
+          {choose(
+            "Installed runtime",
+            "executable_binding",
+            "binding",
+            (b) => b.kind === "executable",
+          )}
+          {browse("executable_binding", "executable")}
+          {number("Time limit (seconds)", "timeout_seconds", 300)}
+          <small>
+            Install adapters in Settings → Program add-ons. Choose Node, Python
+            or the Godot console executable matching the adapter.
+          </small>
+        </>
+      )}
+      {kind.startsWith("network_") &&
+        choose("Target network", "network_id", "network")}
+      {kind === "goal_context" && (
+        <>
+          {choose("Calendar", "calendar_id", "calendar")}
+          {number("Past days", "past_days", 14)}
+          {number("Upcoming days", "future_days", 14)}
+          <label className="nx-check">
+            <input
+              type="checkbox"
+              checked={!!c.include_preferences}
+              onChange={(e) =>
+                update({ include_preferences: e.target.checked })
+              }
+            />{" "}
+            Include saved preferences
+          </label>
+          <label className="nx-check">
+            <input
+              type="checkbox"
+              checked={!!c.include_documents}
+              onChange={(e) => update({ include_documents: e.target.checked })}
+            />{" "}
+            Include up to five document excerpts
+          </label>
         </>
       )}
       {kind === "process" && (

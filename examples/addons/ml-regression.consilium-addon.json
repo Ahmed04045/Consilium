@@ -1,0 +1,46 @@
+{
+  "format": "consilium-addon",
+  "version": 1,
+  "id": "ml-regression",
+  "name": "ML: linear regression",
+  "description": "Train a small regression model with a held-out test set. No packages or cloud services required.",
+  "runtime": "node",
+  "source": "const fs = require('node:fs');\nconst input = JSON.parse(fs.readFileSync(0, 'utf8'));\nif (!Array.isArray(input.rows) || input.rows.length < 8 || input.rows.length > 10000) throw Error('Supply 8–10000 training/test rows');\nconst rows = input.rows;\nif (rows.some(r => !Number.isFinite(r.x) || !Number.isFinite(r.y))) throw Error('Each row needs finite numeric x and y');\nconst split = Math.max(4, Math.min(rows.length - 2, Math.floor(rows.length * 0.7)));\nconst train=rows.slice(0,split), test=rows.slice(split);\nconst mean = (a) => a.reduce((s,v)=>s+v,0)/a.length;\nconst mx=mean(train.map(r=>r.x)), my=mean(train.map(r=>r.y));\nconst variance=train.reduce((s,r)=>s+(r.x-mx)**2,0);\nif (!variance) throw Error('Training x values must vary');\nconst slope=train.reduce((s,r)=>s+(r.x-mx)*(r.y-my),0)/variance, intercept=my-slope*mx;\nconst predictions=test.map(r=>({x:r.x,actual:r.y,predicted:slope*r.x+intercept}));\nconst mae=mean(predictions.map(r=>Math.abs(r.actual-r.predicted)));\nif (![slope,intercept,mae,...predictions.map(r=>r.predicted)].every(Number.isFinite)) throw Error(\"Numeric overflow; scale your dataset\");\nconst model={format:'consilium-linear-regression',version:1,slope,intercept};\nconsole.log(JSON.stringify({model,metrics:{mae,train_rows:train.length,test_rows:test.length,split:'ordered holdout'},predictions,blocks:[{kind:'heading',level:1,text:'Regression experiment'},{kind:'paragraph',text:'Held-out MAE: '+mae.toFixed(4)+'. Train: '+train.length+'; test: '+test.length+'. Ordered split; this example does not prove generalization to other datasets.'},{kind:'paragraph',text:JSON.stringify(model)}]}));",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "rows": {
+        "type": "array",
+        "minItems": 8,
+        "maxItems": 10000,
+        "items": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "rows"
+    ],
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "blocks"
+    ]
+  },
+  "capabilities": []
+}

@@ -418,6 +418,14 @@ export function TaskForm({
           {revision > 0 && (
             <button
               type="button"
+              onClick={() => setT({ ...t, archived: !t.archived })}
+            >
+              {t.archived ? "Unarchive" : "Archive"}
+            </button>
+          )}
+          {revision > 0 && (
+            <button
+              type="button"
               onClick={() => setT({ ...t, deleted: !t.deleted })}
             >
               {t.deleted ? "Undo deletion" : "Delete task"}
@@ -441,6 +449,7 @@ export function CalendarView({ id }: { id: string }) {
     [items, setItems] = useState<Data[]>([]),
     [hidden, setHidden] = useState<string[]>([]),
     [completed, setCompleted] = useState(true),
+    [archived, setArchived] = useState(false),
     [labelsOpen, setLabelsOpen] = useState(false),
     [label, setLabel] = useState<Data>({
       id: uid(),
@@ -471,10 +480,11 @@ export function CalendarView({ id }: { id: string }) {
         calendar_id: id,
         from: days[0],
         to: days.at(-1),
+        include_archived: archived,
       })
         .then(setItems)
         .catch(w.error);
-  }, [id, date, view, w.data.task, w.data.occurrence]);
+  }, [id, date, view, archived, w.data.task, w.data.occurrence]);
   if (!calendar) return <p>Calendar not found.</p>;
   const labels = w.data.label.filter(
       (r) => !r.value.calendar_id || r.value.calendar_id === id,
@@ -582,6 +592,14 @@ export function CalendarView({ id }: { id: string }) {
         </button>
       </header>
       <div className="nx-filters">
+        <label className="nx-check">
+          <input
+            type="checkbox"
+            checked={archived}
+            onChange={(e) => setArchived(e.target.checked)}
+          />{" "}
+          Show archived
+        </label>
         {labels.map((r) => (
           <button
             key={r.value.id}

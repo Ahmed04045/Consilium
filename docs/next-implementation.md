@@ -1,6 +1,6 @@
 # Consilium Next implementation and verification
 
-Updated 2026-10-23. Version **3.0.0-alpha.3**, unsigned development preview.
+Updated 2026-10-25. Version **3.0.0-alpha.4**, unsigned development preview.
 
 Baseline: commit `258765e`, branch `preview/2.0-alpha.4`. Development branch: `next-workspaces`. The preview executable, installer, vault and credential namespace are preserved.
 
@@ -22,6 +22,15 @@ Baseline: commit `258765e`, branch `preview/2.0-alpha.4`. Development branch: `n
 - [x] Learning and code/data acceptance workflows through desktop and CLI with synthetic model responses.
 
 ## Verification evidence
+
+### Alpha.4 automation and adapters
+
+- 50 application/compiler/runtime tests passed in the final combined suite. Coverage includes recorded recurring progress, archive preservation, stale proposals, rejected deletion/fabricated progress/excess workload, aggregate per-run change limits, once-per-slot execution, changed-graph approval invalidation, dead scheduler recovery, source review and disabled add-on imports.
+- Seven Next browser tests passed, including new context, planner and add-on property controls. Production TypeScript/Vite build passed.
+- Native acceptance passed on Windows with an isolated vault and synthetic model responses. Existing learning and code/data workflows passed through desktop and CLI. The new Node regression example returned slope 2, intercept 1 and held-out MAE 0. The installed Godot 4.7.2 console generated an eight-platform scene and Wordcraft report. Both add-ons passed through desktop and CLI.
+- A network-change node produced a pending revision; the saved target remained unchanged until acceptance. The producing run retained its original graph snapshot. Godot scene tests compare structure because engine-generated node IDs differ between runs.
+- Calendar automation is polled while the app is open, or with explicit CLI `tick`; this is not an always-on Windows service. Real-provider planning quality, long-running daily automation and clean-machine installation remain unverified.
+- [Usage, trust boundaries and next integrations](automation-and-adapters.md).
 
 ### Alpha.3 project files
 
@@ -48,7 +57,7 @@ Baseline: commit `258765e`, branch `preview/2.0-alpha.4`. Development branch: `n
 ## Release gates and deliberate boundaries
 
 - Remain preview: clean Windows installation, broader real-model quality trials and several days of normal use are still outstanding.
-- No cloud account, live collaboration, scheduled network triggers, extra Craft applications or model training.
+- No cloud account, live collaboration, always-on scheduler service or extra Craft applications. Optional ML example performs local regression; it is not a general training platform.
 - Native scripts are trusted code with the user's OS permissions. Job Objects manage ordinary child processes and do not isolate filesystem/network access.
 - Profile credentials are not migrated from the old preview namespace. Re-enter named keys and select profiles for imported conversations.
 - JSON is available under Advanced for custom contracts and nested loop bodies. Logical bindings must be assigned on each device.

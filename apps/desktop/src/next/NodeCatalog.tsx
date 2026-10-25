@@ -17,6 +17,7 @@ import {
   Repeat2,
   ShieldCheck,
   Hand,
+  Puzzle,
   type LucideIcon,
 } from "lucide-react";
 import { Data } from "./state";
@@ -25,6 +26,41 @@ export const catalog: Record<
   string,
   { title: string; group: string; icon: LucideIcon; description: string }
 > = {
+  addon: {
+    title: "Program add-on",
+    group: "Extensions",
+    icon: Puzzle,
+    description:
+      "Run an installed, reviewed Node/Python/Godot adapter. Input and output are checked against its contract.",
+  },
+  goal_context: {
+    title: "Goal & progress context",
+    group: "Calendars",
+    icon: CalendarDays,
+    description:
+      "Read a bounded calendar window including recurring exceptions, recorded progress and optional preferences/document excerpts.",
+  },
+  network_read: {
+    title: "Read network",
+    group: "Networks",
+    icon: GitBranch,
+    description:
+      "Read a saved network revision for a planner or reviewing agent.",
+  },
+  network_change: {
+    title: "Propose network revision",
+    group: "Networks",
+    icon: GitBranch,
+    description:
+      "Validate a complete graph and propose a new revision for human review. The active run is unchanged.",
+  },
+  planner: {
+    title: "Planner / decomposition",
+    group: "AI & processing",
+    icon: Bot,
+    description:
+      "Draft a complete bounded network from a goal or existing graph. Connect to Propose network revision for validation and review.",
+  },
   input: {
     title: "Input",
     group: "Start & finish",

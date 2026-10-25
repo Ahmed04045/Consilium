@@ -84,6 +84,11 @@ export default function NextApp() {
     setData(await call("next_snapshot"));
   }
   useEffect(() => {
+    if (!native || !data.automation?.some((r) => r.value.enabled)) return;
+    const timer = setInterval(() => void refresh().catch(error), 5000);
+    return () => clearInterval(timer);
+  }, [data.automation?.some((r) => r.value.enabled)]);
+  useEffect(() => {
     void refresh()
       .catch(error)
       .finally(() => setLoaded(true));

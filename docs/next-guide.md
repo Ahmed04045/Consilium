@@ -76,7 +76,7 @@ Create backup saves Markdown and a consistent SQLite snapshot. Export local reco
 
 ## Current release boundary
 
-This is a development preview. Both acceptance workflows use a deterministic local provider to verify routing, validation and persistence; that does not establish the quality of every real Gemini/OpenRouter/local model. Real-provider trials, longer normal use and clean-machine installer checks remain release gates. JSON schemas and nested loop bodies still use Advanced configuration. Live collaboration, scheduled triggers and other Craft add-ons are intentionally deferred.
+This is a development preview. Both acceptance workflows use a deterministic local provider to verify routing, validation and persistence; that does not establish the quality of every real Gemini/OpenRouter/local model. Real-provider trials, longer normal use and clean-machine installer checks remain release gates. JSON schemas and nested loop bodies still use Advanced configuration. Live collaboration, an always-on scheduling service and other Craft applications are intentionally deferred. Reviewed interval schedules are available while the app remains open.
 
 ## Project files and save locations (alpha.3)
 
@@ -97,3 +97,7 @@ Use **File → Open project…** or Settings → Open Consilium project to impor
 In a file/folder node, **Browse file…** or **Browse folder…** opens the native Windows picker and creates a local binding automatically. **Choose output location…** opens Save As for Write file and Export document nodes. Linked program files and installed runtimes can be selected directly too. DOCX export nodes without a chosen destination retain the earlier local run-output behavior.
 
 “Next” is the preview channel name. Its separate installer identity, vault and credential namespace protect the earlier Consilium preview; it is not a required permanent product name.
+
+## Automation and real-world examples (alpha.4)
+
+See [calendar automation and adapters](automation-and-adapters.md) for scheduled runs, bounded calendar changes, workflow revision proposals, optional program add-ons, and the ML/Godot examples.

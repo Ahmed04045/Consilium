@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Customization } from "../Customization";
 import { openProject } from "./ProjectFiles";
+import { Addons } from "./Addons";
 import {
   call,
   useWorkspace,
@@ -864,6 +865,7 @@ export function SettingsView() {
       </section>
       <Customization />
       <section>
+        <Addons />
         <h2>Preview import & recovery</h2>
         <p>
           Consilium Next uses a separate vault and key namespace. Import copies

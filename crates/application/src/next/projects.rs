@@ -99,7 +99,12 @@ impl Engine {
             let mut value = self.next_get::<Value>(&kind, &id)?.value;
             if kind == "network" {
                 nodes_mut(&mut value, &mut |n| {
-                    for (field, rk) in [("calendar_id", "calendar"), ("document_id", "document")] {
+                    for (field, rk) in [
+                        ("calendar_id", "calendar"),
+                        ("document_id", "document"),
+                        ("network_id", "network"),
+                        ("addon_id", "addon"),
+                    ] {
                         if let Some(id) = n["config"][field].as_str().filter(|s| !s.is_empty()) {
                             pending.push((rk.into(), id.into()));
                         }
@@ -338,7 +343,8 @@ impl Engine {
                     "task",
                     "label",
                     "document",
-                    "occurrence"
+                    "occurrence",
+                    "addon"
                 ]
                 .contains(&field(r, "kind")?),
                 "Unsupported project record"
@@ -407,6 +413,8 @@ impl Engine {
                         "binding_id",
                         "script_binding",
                         "executable_binding",
+                        "network_id",
+                        "addon_id",
                     ]
                     .contains(&field) =>
                 {
@@ -496,6 +504,13 @@ impl Engine {
             if kind == "document" {
                 let _: Document = decode(v.clone())?;
             }
+            if kind == "addon" {
+                v["enabled"] = json!(false);
+                v["manifest"]["id"] = v["id"].clone();
+                let addon: super::addons::ProgramAddon = decode(v["manifest"].clone())?;
+                addon.validate()?;
+                v["digest"] = json!(consilium_workflow::digest(&addon)?);
+            }
             if kind == "occurrence" {
                 let _: OccurrenceOverride = decode(v.clone())?;
             }
@@ -546,6 +561,43 @@ mod tests {
             {"id":"process","kind":"process","title":"Program","config":{"script_binding":"script","executable_binding":"unbound","extension":"js"},"position":{"x":200,"y":0}}
         ],"edges":[],"limits":{"concurrency":2,"iterations":5,"model_calls":20,"timeout_seconds":1800}})).unwrap();
         (dir, e)
+    }
+    #[test]
+    fn addon_project_import_preserves_source_but_requires_new_trust() {
+        let (d, e) = fixture();
+        let sample = e.addon_action("next_addon_samples", json!({})).unwrap()[0].clone();
+        e.addon_action(
+            "next_addon_install",
+            json!({"approved":true,"manifest":sample["manifest"],"digest":sample["digest"]}),
+        )
+        .unwrap();
+        let graph = e
+            .addon_action("next_addon_example", json!({"id":sample["manifest"]["id"]}))
+            .unwrap();
+        let out = d.path().join("addon.consilium");
+        e.project_action(
+            "next_project_write",
+            json!({"kind":"network","id":graph["value"]["id"],"path":out}),
+        )
+        .unwrap();
+        let imported = e.project_read(&out).unwrap();
+        let network = e
+            .next_get::<Value>("network", imported["id"].as_str().unwrap())
+            .unwrap();
+        let id = network.value["nodes"][1]["config"]["addon_id"]
+            .as_str()
+            .unwrap();
+        let addon = e.next_get::<Value>("addon", id).unwrap().value;
+        assert_ne!(json!(id), sample["manifest"]["id"]);
+        assert_eq!(addon["enabled"], false);
+        assert_eq!(addon["manifest"]["source"], sample["manifest"]["source"]);
+        let manifest: super::super::addons::ProgramAddon =
+            decode(addon["manifest"].clone()).unwrap();
+        assert_eq!(
+            addon["digest"],
+            consilium_workflow::digest(&manifest).unwrap()
+        );
+        assert!(e.next_list("run").unwrap().is_empty());
     }
     #[test]
     fn single_file_roundtrip_restores_inputs_without_reusing_device_bindings() {

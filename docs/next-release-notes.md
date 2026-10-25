@@ -1,4 +1,15 @@
-# Consilium Next — 3.0.0-alpha.3
+# Consilium Next — 3.0.0-alpha.4
+
+- Goal/progress context nodes include recurring completion evidence and optional bounded document excerpts.
+- Reviewed repeating runs, with optional calendar rules for creating/updating upcoming tasks and archiving completed work.
+- Planner, network-read and network-proposal nodes support reviewable workflow adaptation without changing an active run.
+- Optional local program add-ons with source review, schema validation and installed runtime selection.
+- Included examples: Node.js regression with a held-out evaluation report, and Godot platform-scene generation.
+- Archive visibility controls and CLI `tick` for one due approved automation.
+
+Scheduled runs require the desktop app to remain open or an explicit CLI tick. This is still an unsigned preview. Android handoff, ESP32/PLC adapters and additional Craft applications are not included.
+
+## Previous project files update (alpha.3)
 
 - Native file/folder pickers directly in node properties, including script inputs and file/DOCX output destinations.
 - Calendar and network Save / Save as with visible locations and protection against overwriting external edits.
@@ -23,6 +34,6 @@ Consilium now opens into a customizable Home workspace, with independent tabs fo
 - Local agents, native processes, file inputs/outputs, document creation/export and reviewed calendar proposals, shared between desktop and the bundled CLI.
 - Copy-only preview migration, isolated Next data/credentials, resumable execution and protection against repeating completed writes.
 
-This is an **unsigned development preview**, not a stable release. Advanced schemas and loop bodies still use JSON. Live collaboration, scheduled triggers and optional Craft add-ons are deferred. The original Consilium preview remains separate.
+This is an **unsigned development preview**, not a stable release. Advanced schemas and loop bodies still use JSON. Live collaboration, an always-on scheduling service and optional Craft applications are deferred. The original Consilium preview remains separate.
 
 See [the guide](next-guide.md) and [verification status](next-implementation.md) before using workflows with important data. Native scripts execute with your user permissions after run review; they are not sandboxed.

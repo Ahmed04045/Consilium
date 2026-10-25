@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "consilium"
-version = "3.0.0-alpha.3"
+version = "3.0.0-alpha.4"
 dependencies = [
  "consilium-adapters",
  "consilium-application",
@@ -701,7 +701,7 @@ dependencies = [
 
 [[package]]
 name = "consilium-cli"
-version = "3.0.0-alpha.3"
+version = "3.0.0-alpha.4"
 dependencies = [
  "anyhow",
  "consilium-application",

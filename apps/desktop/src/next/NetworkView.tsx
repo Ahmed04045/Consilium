@@ -27,6 +27,7 @@ import { useWorkspace, row, call, Data, uid, download } from "./state";
 import { catalog, groups, nodeSummary } from "./NodeCatalog";
 import { NodeProperties } from "./NodeProperties";
 import { ProjectFiles } from "./ProjectFiles";
+import { AutomationSetup, AutomationStatus } from "./Automation";
 function GraphNode({ data, selected }: NodeProps) {
   const d = data as Data;
   const Icon = catalog[d.kind].icon;
@@ -110,6 +111,21 @@ function GraphNode({ data, selected }: NodeProps) {
 }
 const nodeTypes = { workspace: GraphNode };
 const defaults: Record<string, Data> = {
+  addon: { addon_id: "", executable_binding: "", timeout_seconds: 300 },
+  goal_context: {
+    calendar_id: "",
+    past_days: 14,
+    future_days: 14,
+    include_preferences: true,
+    include_documents: false,
+  },
+  network_read: { network_id: "" },
+  network_change: { network_id: "" },
+  planner: {
+    profile_id: "",
+    system_prompt:
+      "Design a bounded Consilium network. Return JSON {network:{schema_version:1,id,name,nodes,edges,limits}}. Nodes have id,kind,title,config,position:{x,y}; edges have id,source,target,source_port:'out',target_port:'in'. Use only supplied resource IDs. Preserve unrelated steps. No ordinary cycles; use bounded loop nodes. Never execute the graph or invent permissions.",
+  },
   input: {},
   agent: {
     profile_id: "",
@@ -276,6 +292,11 @@ export function NetworkView({ id }: { id: string }) {
     );
   }
   async function save() {
+    if (
+      record?.revision === revision &&
+      JSON.stringify(graph) === savedGraph.current
+    )
+      return record;
     const r = await w.save("network", graph, revision);
     setRevision(r.revision);
     savedGraph.current = JSON.stringify(graph);
@@ -468,6 +489,7 @@ export function NetworkView({ id }: { id: string }) {
           Review & run
         </button>
       </header>
+      <AutomationStatus id={id} />
       {record.revision !== revision && (
         <div className="nx-validation">
           A newer revision is saved.{" "}
@@ -948,7 +970,7 @@ export function NetworkView({ id }: { id: string }) {
       <section className="nx-run-console">
         <header>
           <h2>Run console</h2>
-          <small>{running ? "Running…" : "Manual runs only"}</small>
+          <small>{running ? "Running…" : "Local run history"}</small>
         </header>
         {!runs.length && (
           <p className="nx-muted">
@@ -1071,7 +1093,7 @@ export function NetworkView({ id }: { id: string }) {
                                 .catch(w.error)
                             }
                           >
-                            Review calendar proposal
+                            Review change proposal
                           </button>
                         )}
                       </details>
@@ -1094,7 +1116,7 @@ export function NetworkView({ id }: { id: string }) {
             <header>
               <h2>
                 {review.proposal
-                  ? "Review calendar changes"
+                  ? "Review proposed changes"
                   : "Review this run"}
               </h2>
               <button onClick={() => setReview(null)}>Close</button>
@@ -1128,7 +1150,7 @@ export function NetworkView({ id }: { id: string }) {
                   <div key={n.id} className="nx-review-step">
                     <strong>{n.title}</strong>
                     <p>{catalog[n.kind]?.description}</p>
-                    {n.kind === "agent" && (
+                    {(n.kind === "agent" || n.kind === "planner") && (
                       <p>
                         Model:{" "}
                         {
@@ -1141,6 +1163,17 @@ export function NetworkView({ id }: { id: string }) {
                             ?.value.model
                         }
                       </p>
+                    )}
+                    {n.kind === "addon" && (
+                      <details>
+                        <summary>Review add-on source</summary>
+                        <pre>
+                          {
+                            review.resources[`addon:${n.config.addon_id}`]
+                              ?.value.manifest.source
+                          }
+                        </pre>
+                      </details>
                     )}
                     {n.kind === "process" &&
                       (!n.config.operation ||
@@ -1205,6 +1238,12 @@ export function NetworkView({ id }: { id: string }) {
                   I reviewed the scripts, model destinations, bindings and
                   declared writes.
                 </label>
+                <AutomationSetup
+                  id={id}
+                  review={review}
+                  input={input}
+                  trusted={trusted}
+                />
                 <footer>
                   <button
                     disabled={!trusted}

@@ -257,3 +257,46 @@ test("project save and export expose formats without invoking a picker until con
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+test("new workflow nodes expose goal context, planner and adapter properties", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Home", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Control+n");
+  await page.getByRole("button", { name: "Network", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Adaptive studio");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Goal & progress context", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Place in canvas centre", exact: true })
+    .click();
+  await expect(page.getByLabel("Past days", { exact: true })).toHaveValue("14");
+  await expect(
+    page.getByRole("checkbox", {
+      name: "Include up to five document excerpts",
+    }),
+  ).not.toBeChecked();
+  await page
+    .getByRole("button", { name: "Planner / decomposition", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Place in canvas centre", exact: true })
+    .click();
+  await expect(
+    page.getByRole("checkbox", { name: "Include goal context" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Program add-on", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Place in canvas centre", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Installed add-on", { exact: true }),
+  ).toBeVisible();
+});

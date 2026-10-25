@@ -679,6 +679,160 @@ try {
     assert.notEqual(opened.id, id);
   }
   assert.equal((await rpc("next_snapshot")).run.length, beforeProjectRuns);
+  const addons = await rpc("next_addon_samples");
+  for (const sample of addons) {
+    const godot = sample.manifest.runtime === "godot";
+    const executable = godot
+      ? process.env.CONSILIUM_TEST_GODOT
+      : process.execPath;
+    if (!executable) continue;
+    await rpc("next_addon_install", { ...sample, approved: true });
+    await save("binding", {
+      id: `addon-runtime-${sample.manifest.id}`,
+      name: "Test runtime",
+      kind: "executable",
+      path: executable,
+      writable: false,
+    });
+    const example = await rpc("next_addon_example", { id: sample.manifest.id });
+    example.value.nodes.find(
+      (n) => n.kind === "addon",
+    ).config.executable_binding = `addon-runtime-${sample.manifest.id}`;
+    await rpc("next_save", {
+      kind: "network",
+      value: example.value,
+      revision: example.revision,
+    });
+    const review = await rpc("next_network_review", { id: example.value.id });
+    const run = await rpc("next_network_run", {
+      network_id: example.value.id,
+      revision: review.plan.revision,
+      approval_digest: review.approval_digest,
+      input: {},
+    });
+    assert.equal(run.status, "completed", JSON.stringify(run.nodes));
+    if (godot) {
+      assert.equal(run.nodes.adapter.output.platforms, 8);
+      assert(run.nodes.adapter.output.scene_text.includes("GeneratedLevel"));
+    } else {
+      assert.equal(run.nodes.adapter.output.model.slope, 2);
+      assert.equal(run.nodes.adapter.output.model.intercept, 1);
+      assert.equal(run.nodes.adapter.output.metrics.mae, 0);
+    }
+    assert(run.nodes.report.output.document_id);
+    const addonConfig = join(root, `${sample.manifest.id}-approved.json`);
+    writeFileSync(
+      addonConfig,
+      JSON.stringify({
+        network_id: example.value.id,
+        revision: review.plan.revision,
+        approval_digest: review.approval_digest,
+        input: {},
+      }),
+    );
+    const cliAddonRun = await cliCall(["run", addonConfig]);
+    assert.equal(
+      cliAddonRun.status,
+      "completed",
+      JSON.stringify(cliAddonRun.nodes),
+    );
+    if (godot) {
+      assert.equal(cliAddonRun.nodes.adapter.output.platforms, 8);
+      assert.equal(
+        (
+          cliAddonRun.nodes.adapter.output.scene_text.match(
+            /type="MeshInstance3D"/g,
+          ) || []
+        ).length,
+        8,
+      );
+      assert(
+        cliAddonRun.nodes.adapter.output.scene_text.includes(
+          'name="GeneratedLevel"',
+        ),
+      );
+      assert.deepEqual(
+        cliAddonRun.nodes.adapter.output.blocks,
+        run.nodes.adapter.output.blocks,
+      );
+    } else {
+      assert.deepEqual(
+        cliAddonRun.nodes.adapter.output,
+        run.nodes.adapter.output,
+      );
+    }
+    assert(cliAddonRun.nodes.report.output.document_id);
+    console.log(`${sample.manifest.name}: desktop and CLI passed`);
+    if (!godot) {
+      const before = await rpc("next_get", {
+        kind: "network",
+        id: example.value.id,
+      });
+      const revised = { ...before.value, name: "Reviewed ML revision" };
+      await save("network", {
+        schema_version: 1,
+        id: "revision-author",
+        name: "Network revision test",
+        limits: learning.limits,
+        nodes: [
+          {
+            id: "input",
+            kind: "input",
+            title: "Draft",
+            config: { value: { network: revised } },
+            position: { x: 0, y: 0 },
+          },
+          {
+            id: "propose",
+            kind: "network_change",
+            title: "Propose revision",
+            config: { network_id: example.value.id },
+            position: { x: 200, y: 0 },
+          },
+        ],
+        edges: [{ id: "edge", source: "input", target: "propose" }],
+      });
+      const authorReview = await rpc("next_network_review", {
+        id: "revision-author",
+      });
+      const authorRun = await rpc("next_network_run", {
+        network_id: "revision-author",
+        revision: authorReview.plan.revision,
+        approval_digest: authorReview.approval_digest,
+        input: {},
+      });
+      assert.equal(authorRun.status, "completed");
+      assert.equal(
+        (await rpc("next_get", { kind: "network", id: example.value.id }))
+          .revision,
+        before.revision,
+      );
+      await rpc("next_accept_changes", {
+        id: authorRun.nodes.propose.output.proposal_id,
+      });
+      assert.equal(
+        (await rpc("next_get", { kind: "network", id: example.value.id })).value
+          .name,
+        "Reviewed ML revision",
+      );
+      assert.equal(authorRun.review.plan.network.name, "Network revision test");
+    }
+  }
+  await page
+    .getByRole("button", { name: "Settings", exact: true })
+    .first()
+    .click();
+  await page
+    .getByRole("button", { name: "Review ML: linear regression", exact: true })
+    .click();
+  const addonDialog = page.getByRole("dialog", { name: "Review add-on" });
+  await expect(addonDialog).toBeVisible();
+  await addonDialog.screenshot({
+    path: "../../docs/screenshots/next-addon-review.png",
+  });
+  await addonDialog
+    .getByRole("button", { name: "Close dialog", exact: true })
+    .click();
   await page
     .getByRole("tab", { name: "Vocabulary practice", exact: true })
     .last()

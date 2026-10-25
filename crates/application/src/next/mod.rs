@@ -1,4 +1,6 @@
 //! Versioned workspace services shared by the desktop and command line.
+mod addons;
+mod automation;
 mod conversation;
 mod migration;
 mod projects;
@@ -28,6 +30,8 @@ const KINDS: &[&str] = &[
     "layout",
     "run",
     "artifact",
+    "automation",
+    "addon",
 ];
 impl Engine {
     fn mutation_epoch(&self) -> Result<(String, i64, Value)> {
@@ -202,6 +206,12 @@ impl Engine {
         Ok(record)
     }
     pub async fn next_action(&self, action: &str, p: Value) -> Result<Value> {
+        if action.starts_with("next_addon_") {
+            return self.addon_action(action, p);
+        }
+        if action.starts_with("next_automation_") {
+            return self.automation_action(action, p).await;
+        }
         if action.starts_with("next_project_") {
             return self.project_action(action, p);
         }
@@ -256,7 +266,7 @@ impl Engine {
                 let mut out = vec![];
                 for record in self.next_list("task")? {
                     let t: Task = decode(record.value)?;
-                    if t.calendar_id == calendar {
+                    if t.calendar_id == calendar && (!t.archived || p["include_archived"] == true) {
                         for o in expand(&t, from, to, &exceptions)? {
                             out.push(json!({"occurrence":o,"revision":record.revision}));
                         }

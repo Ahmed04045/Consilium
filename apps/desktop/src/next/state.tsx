@@ -34,15 +34,20 @@ const kinds = [
   "changeset",
   "layout",
   "run",
+  "automation",
+  "addon",
 ];
 export const empty = () =>
   Object.fromEntries(kinds.map((k) => [k, []])) as Snapshot;
 // Browser preview is explicitly separate from the native vault and cannot run code or call providers.
 export async function call<T = any>(action: string, p: Data = {}): Promise<T> {
   if (native) return rpc<T>(action, p);
-  const data: Snapshot = JSON.parse(
-    localStorage.getItem("consilium-next-browser") || JSON.stringify(empty()),
-  );
+  const data: Snapshot = {
+    ...empty(),
+    ...JSON.parse(
+      localStorage.getItem("consilium-next-browser") || JSON.stringify(empty()),
+    ),
+  };
   if (action === "next_snapshot") return data as T;
   if (action === "next_get")
     return data[p.kind].find((r) => r.value.id === p.id) as T;
@@ -65,6 +70,7 @@ export async function call<T = any>(action: string, p: Data = {}): Promise<T> {
         (r) =>
           r.value.calendar_id === p.calendar_id &&
           !r.value.deleted &&
+          (p.include_archived || !r.value.archived) &&
           r.value.start_date <= p.to &&
           r.value.end_date >= p.from,
       )

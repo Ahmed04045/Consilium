@@ -28,12 +28,13 @@ async fn run() -> Result<()> {
     };
     let command = args.first().map(String::as_str).unwrap_or("help");
     if command == "help" {
-        println!("consilium [--vault PATH] validate|compile|import NETWORK.json\nconsilium [--vault PATH] review NETWORK_ID\nconsilium [--vault PATH] run APPROVED_CONFIG.json\nconsilium [--vault PATH] runs|inspect RUN_ID|cancel RUN_ID\nconsilium [--vault PATH] inspect ID --kind changeset\nconsilium [--vault PATH] accept CHANGESET_ID --approve\nconsilium [--vault PATH] export NETWORK_ID DESTINATION.json --include-scripts\nNew run config: {{network_id, revision, approval_digest, input}}. Resume config: {{run_id, approval_digest, approved_nodes: [], retry_nodes: []}}. Inspect the complete review before approving. Imports never execute automatically.");
+        println!("consilium [--vault PATH] validate|compile|import NETWORK.json\nconsilium [--vault PATH] review NETWORK_ID\nconsilium [--vault PATH] run APPROVED_CONFIG.json\nconsilium [--vault PATH] tick (execute one due, previously approved automation)\nconsilium [--vault PATH] runs|inspect RUN_ID|cancel RUN_ID\nconsilium [--vault PATH] inspect ID --kind changeset\nconsilium [--vault PATH] accept CHANGESET_ID --approve\nconsilium [--vault PATH] export NETWORK_ID DESTINATION.json --include-scripts\nNew run config: {{network_id, revision, approval_digest, input}}. Resume config: {{run_id, approval_digest, approved_nodes: [], retry_nodes: []}}. Inspect the complete review before approving. Imports never execute automatically.");
         return Ok(());
     }
     let engine = Engine::new(Store::new(vault)?);
     let arg = || args.get(1).context("Missing argument");
     let result = match command {
+        "tick" => engine.automation_tick().await?,
         "validate" | "compile" => {
             let mut value: Value = serde_json::from_slice(&std::fs::read(arg()?)?)?;
             if value["format"] == "consilium-network" {

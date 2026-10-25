@@ -79,6 +79,11 @@ pub const NODE_KINDS: &[&str] = &[
     "input",
     "output",
     "agent",
+    "planner",
+    "goal_context",
+    "network_read",
+    "network_change",
+    "addon",
     "process",
     "file_read",
     "folder_read",
@@ -139,7 +144,7 @@ fn compile_depth(n: &NetworkDefinition, revision: i64, depth: usize) -> Result<C
             node.kind
         );
         let required = match node.kind.as_str() {
-            "agent" => vec!["profile_id", "system_prompt"],
+            "agent" | "planner" => vec!["profile_id", "system_prompt"],
             "process" if node.config["operation"].as_str().unwrap_or("script") == "script" => {
                 if node.config.get("script_binding").is_some() {
                     vec!["executable_binding", "script_binding"]
@@ -148,7 +153,9 @@ fn compile_depth(n: &NetworkDefinition, revision: i64, depth: usize) -> Result<C
                 }
             }
             "file_read" | "folder_read" | "file_write" => vec!["binding_id"],
-            "calendar_read" | "calendar_change" => vec!["calendar_id"],
+            "calendar_read" | "calendar_change" | "goal_context" => vec!["calendar_id"],
+            "network_read" | "network_change" => vec!["network_id"],
+            "addon" => vec!["addon_id", "executable_binding"],
             "document_read" | "document_export" => vec!["document_id"],
             _ => vec![],
         };
@@ -202,7 +209,8 @@ fn compile_depth(n: &NetworkDefinition, revision: i64, depth: usize) -> Result<C
             jsonschema::validator_for(&node.config["schema"])
                 .map_err(|e| anyhow::anyhow!("{}: invalid JSON schema: {e}", node.title))?;
         }
-        if node.kind == "agent" && node.config.get("schema").is_some() {
+        if matches!(node.kind.as_str(), "agent" | "planner") && node.config.get("schema").is_some()
+        {
             jsonschema::validator_for(&node.config["schema"])
                 .map_err(|e| anyhow::anyhow!("Invalid agent output schema: {e}"))?;
         }
@@ -272,6 +280,8 @@ fn compile_depth(n: &NetworkDefinition, revision: i64, depth: usize) -> Result<C
             "file_read",
             "folder_read",
             "calendar_read",
+            "goal_context",
+            "network_read",
             "document_read",
             "document_export",
         ]
