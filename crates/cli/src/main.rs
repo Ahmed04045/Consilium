@@ -12,6 +12,16 @@ async fn main() {
 }
 async fn run() -> Result<()> {
     let mut args = std::env::args().skip(1).collect::<Vec<_>>();
+    if args
+        .first()
+        .is_some_and(|s| matches!(s.as_str(), "--version" | "-V" | "version"))
+    {
+        println!(
+            "consi {} (Consilium workflow runtime)",
+            env!("CARGO_PKG_VERSION")
+        );
+        return Ok(());
+    }
     let vault = if args.first().map(String::as_str) == Some("--vault") {
         let p = args.get(1).context("--vault requires a path")?.clone();
         args.drain(0..2);
@@ -33,9 +43,9 @@ async fn run() -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&result)?);
         return Ok(());
     }
-    if command == "help" {
-        println!("Portable projects (no desktop app needed):\nconsilium pack SOURCE.consilium|FOLDER DEST.consilium [--without-inputs]\nconsilium extract SOURCE.consilium NEW_FOLDER [--without-inputs]\nconsilium [--vault PATH] import FILE.consilium|NETWORK.json\nconsilium [--vault PATH] bind ID PATH --kind file|folder|executable [--writable]\nconsilium [--vault PATH] configure RECORD.json (profile or binding, expected revision required)\nProject conversion creates a validated portable copy with new record identities. Import never executes. Use review then run to execute.\n");
-        println!("consilium [--vault PATH] validate|compile|import NETWORK.json\nconsilium [--vault PATH] review NETWORK_ID\nconsilium [--vault PATH] run APPROVED_CONFIG.json\nconsilium [--vault PATH] tick (execute one due, previously approved automation)\nconsilium [--vault PATH] runs|inspect RUN_ID|cancel RUN_ID\nconsilium [--vault PATH] inspect ID --kind changeset\nconsilium [--vault PATH] accept CHANGESET_ID --approve\nconsilium [--vault PATH] export NETWORK_ID DESTINATION.json --include-scripts\nNew run config: {{network_id, revision, approval_digest, input}}. Resume config: {{run_id, approval_digest, approved_nodes: [], retry_nodes: []}}. Inspect the complete review before approving. Imports never execute automatically.");
+    if matches!(command, "help" | "--help" | "-h") {
+        println!("Portable projects (no desktop app needed):\nconsi pack SOURCE.consilium|FOLDER DEST.consilium [--without-inputs]\nconsi extract SOURCE.consilium NEW_FOLDER [--without-inputs]\nconsi [--vault PATH] import FILE.consilium|NETWORK.json\nconsi [--vault PATH] bind ID PATH --kind file|folder|executable [--writable]\nconsi [--vault PATH] configure RECORD.json (profile or binding, expected revision required)\nProject conversion creates a validated portable copy with new record identities. Import never executes. Use review then run to execute.\n");
+        println!("consi [--vault PATH] validate|compile|import NETWORK.json\nconsi [--vault PATH] review NETWORK_ID\nconsi [--vault PATH] run APPROVED_CONFIG.json\nconsi [--vault PATH] tick (execute one due, previously approved automation)\nconsi [--vault PATH] runs|inspect RUN_ID|cancel RUN_ID\nconsi [--vault PATH] inspect ID --kind changeset\nconsi [--vault PATH] accept CHANGESET_ID --approve\nconsi [--vault PATH] export NETWORK_ID DESTINATION.json --include-scripts\nNew run config: {{network_id, revision, approval_digest, input}}. Resume config: {{run_id, approval_digest, approved_nodes: [], retry_nodes: []}}. Inspect the complete review before approving. Imports never execute automatically.");
         return Ok(());
     }
     let engine = Engine::new(Store::new(vault)?);
@@ -135,7 +145,7 @@ async fn run() -> Result<()> {
             std::fs::write(path, serde_json::to_vec_pretty(&result)?)?;
             json!({"saved":path})
         }
-        _ => bail!("Unknown command. Run consilium help"),
+        _ => bail!("Unknown command. Run consi help"),
     };
     println!("{}", serde_json::to_string_pretty(&result)?);
     if result["status"].as_str().is_some_and(|s| s != "completed") {

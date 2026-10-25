@@ -5,6 +5,9 @@ edition = "2021"
 [[bin]]
 name = "consilium"
 path = "src/main.rs"
+[[bin]]
+name = "consi"
+path = "src/consi.rs"
 [dependencies]
 consilium-application.workspace = true
 consilium-workflow.workspace = true

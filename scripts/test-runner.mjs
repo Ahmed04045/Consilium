@@ -10,9 +10,9 @@ import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import assert from "node:assert/strict";
 const root = mkdtempSync(join(tmpdir(), "consilium-runner-test-"));
-const exe = join(root, "consilium.exe");
+const exe = join(root, "consi.exe");
 // Execute a copied standalone binary, outside the app and without a WebView.
-cpSync(resolve("target/release/consilium.exe"), exe);
+cpSync(resolve("target/release/consi.exe"), exe);
 const vault = join(root, "vault");
 function cli(args, code = 0) {
   const result = spawnSync(exe, ["--vault", vault, ...args], {

@@ -1,5 +1,31 @@
 # Consilium standalone runner preview
 
+## Install the `consi` command
+
+Extract the entire runner ZIP, open PowerShell in its `consilium-runner` folder, and run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-Consi.ps1
+```
+
+This copies `consi.exe` and the compatible `consilium.exe` command to `%LOCALAPPDATA%\ConsiliumRunner\bin`, adds that folder to your **user PATH** without replacing its existing entries, and needs no administrator access. Reopen existing terminal applications afterward. The execution-policy override applies only to that installer invocation; it does not change your saved policy. You can inspect the script before running it, use `-WhatIf` to preview, or `-NoPath` to copy the binaries without changing PATH. Existing running copies must be closed before updating.
+
+Then, from any folder:
+
+```powershell
+consi --version
+consi --help
+consi extract .\your-project.consi .\unpacked
+consi pack .\unpacked .\copy.consi
+consi --vault .\runner-vault import .\copy.consi
+consi --vault .\runner-vault review NETWORK_ID
+consi --vault .\runner-vault run .\approved.json
+```
+
+`consi` and `consilium` are the same runtime with identical validation and approval rules. The longer command remains supported in the examples below. `run` takes a reviewed run configuration, not arbitrary source code or an unapproved project. This is a graph interpreter with a validation/compilation stage, not a C++ compiler or a Python replacement. Python/Node processes still need their runtimes installed; compiling C++ requires a separately configured toolchain. No new language syntax, dependency downloader, background service or file association is installed.
+
+To remove command discovery, remove just `%LOCALAPPDATA%\ConsiliumRunner\bin` from your user PATH in Windows Environment Variables. The installation does not move or delete your vault.
+
 The portable `consilium.exe` runs without installing or launching the desktop app and does not use WebView. It still needs to be downloaded/copied to the computer. Windows x64 is the current binary target. Scripts require their chosen installed runtime; agents require configured providers. It is not an Android executable or an always-on phone receiver.
 
 ## Pack and extract

@@ -1,11 +1,14 @@
+param([string]$OutputDirectory = 'target/consi-preview')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$output = Join-Path $root 'target/standalone-preview'
+$output = Join-Path $root $OutputDirectory
 if (Test-Path -LiteralPath $output) { throw 'Output already exists. Preserve it or choose a new build directory before packaging.' }
 $runner = Join-Path $output 'consilium-runner'
 $prompts = Join-Path $output 'ai-network-test'
 New-Item -ItemType Directory -Path $runner, (Join-Path $prompts 'evaluator') | Out-Null
 Copy-Item -LiteralPath (Join-Path $root 'target/release/consilium.exe') -Destination $runner
+Copy-Item -LiteralPath (Join-Path $root 'target/release/consi.exe') -Destination $runner
+Copy-Item -LiteralPath (Join-Path $root 'scripts/install-runner.ps1') -Destination (Join-Path $runner 'Install-Consi.ps1')
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $runner
 Copy-Item -LiteralPath (Join-Path $root 'docs/standalone-runner.md') -Destination (Join-Path $runner 'README.md')
 $fixture = Join-Path $root 'examples/wake-lab'
