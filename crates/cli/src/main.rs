@@ -2,6 +2,7 @@ use anyhow::{bail, Context, Result};
 use consilium_application::Engine;
 use consilium_storage::Store;
 use serde_json::{json, Value};
+mod packages;
 #[tokio::main]
 async fn main() {
     if let Err(e) = run().await {
@@ -27,7 +28,13 @@ async fn run() -> Result<()> {
         }
     };
     let command = args.first().map(String::as_str).unwrap_or("help");
+    if matches!(command, "pack" | "extract") {
+        let result = packages::convert(&args)?;
+        println!("{}", serde_json::to_string_pretty(&result)?);
+        return Ok(());
+    }
     if command == "help" {
+        println!("Portable projects (no desktop app needed):\nconsilium pack SOURCE.consilium|FOLDER DEST.consilium [--without-inputs]\nconsilium extract SOURCE.consilium NEW_FOLDER [--without-inputs]\nconsilium [--vault PATH] import FILE.consilium|NETWORK.json\nconsilium [--vault PATH] bind ID PATH --kind file|folder|executable [--writable]\nconsilium [--vault PATH] configure RECORD.json (profile or binding, expected revision required)\nProject conversion creates a validated portable copy with new record identities. Import never executes. Use review then run to execute.\n");
         println!("consilium [--vault PATH] validate|compile|import NETWORK.json\nconsilium [--vault PATH] review NETWORK_ID\nconsilium [--vault PATH] run APPROVED_CONFIG.json\nconsilium [--vault PATH] tick (execute one due, previously approved automation)\nconsilium [--vault PATH] runs|inspect RUN_ID|cancel RUN_ID\nconsilium [--vault PATH] inspect ID --kind changeset\nconsilium [--vault PATH] accept CHANGESET_ID --approve\nconsilium [--vault PATH] export NETWORK_ID DESTINATION.json --include-scripts\nNew run config: {{network_id, revision, approval_digest, input}}. Resume config: {{run_id, approval_digest, approved_nodes: [], retry_nodes: []}}. Inspect the complete review before approving. Imports never execute automatically.");
         return Ok(());
     }
@@ -44,12 +51,44 @@ async fn run() -> Result<()> {
             json!(consilium_workflow::compile(&n, 0)?)
         }
         "import" => {
-            engine
-                .run(
-                    "next_network_import",
-                    json!({"package":serde_json::from_slice::<Value>(&std::fs::read(arg()?)?)?}),
-                )
-                .await?
+            let path = packages::source_path(arg()?)?;
+            let package: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
+            if package["format"] == "consilium-project" {
+                engine
+                    .run("next_project_read", json!({"path":path}))
+                    .await?
+            } else {
+                engine
+                    .run("next_network_import", json!({"package":package}))
+                    .await?
+            }
+        }
+        "bind" => {
+            let id = arg()?;
+            let path = std::path::absolute(args.get(2).context("Choose a local path")?)?;
+            let kind_index = args
+                .iter()
+                .position(|s| s == "--kind")
+                .context("Specify --kind file|folder|executable")?;
+            let kind = args.get(kind_index + 1).context("Missing binding kind")?;
+            anyhow::ensure!(
+                ["file", "folder", "executable"].contains(&kind.as_str()),
+                "Unknown binding kind"
+            );
+            let old = engine.next_get::<Value>("binding", id).ok();
+            engine.run("next_save", json!({"kind":"binding","revision":old.map_or(0, |r|r.revision),"value":{"id":id,"name":id,"kind":kind,"path":path,"writable":args.iter().any(|s|s=="--writable")}})).await?
+        }
+        "configure" => {
+            let request: Value = serde_json::from_slice(&std::fs::read(arg()?)?)?;
+            anyhow::ensure!(
+                ["profile", "binding"].contains(&request["kind"].as_str().unwrap_or("")),
+                "Configure accepts only profiles or local bindings"
+            );
+            anyhow::ensure!(
+                request["revision"].as_i64().is_some(),
+                "Specify the expected record revision (0 for new)"
+            );
+            engine.run("next_save", request).await?
         }
         "review" => {
             engine

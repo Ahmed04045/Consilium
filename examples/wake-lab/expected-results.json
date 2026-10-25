@@ -1,0 +1,86 @@
+[
+  {
+    "id": "happy",
+    "status": "awake",
+    "attempts": 1,
+    "route": "primary",
+    "needs_review": false
+  },
+  {
+    "id": "third-attempt",
+    "status": "awake",
+    "attempts": 3,
+    "route": "primary",
+    "needs_review": false
+  },
+  {
+    "id": "secondary",
+    "status": "awake",
+    "attempts": 4,
+    "route": "secondary",
+    "needs_review": false
+  },
+  {
+    "id": "primary-offline",
+    "status": "awake",
+    "attempts": 1,
+    "route": "secondary",
+    "needs_review": false
+  },
+  {
+    "id": "both-offline",
+    "status": "relay_unavailable",
+    "attempts": 0,
+    "route": "none",
+    "needs_review": true
+  },
+  {
+    "id": "invalid-signature",
+    "status": "rejected_auth",
+    "attempts": 0,
+    "route": "none",
+    "needs_review": false
+  },
+  {
+    "id": "expired",
+    "status": "rejected_expired",
+    "attempts": 0,
+    "route": "none",
+    "needs_review": false
+  },
+  {
+    "id": "replayed",
+    "status": "rejected_replay",
+    "attempts": 0,
+    "route": "none",
+    "needs_review": false
+  },
+  {
+    "id": "unsupported",
+    "status": "manual_required",
+    "attempts": 0,
+    "route": "none",
+    "needs_review": true
+  },
+  {
+    "id": "no-power",
+    "status": "manual_required",
+    "attempts": 0,
+    "route": "none",
+    "needs_review": true
+  },
+  {
+    "id": "no-ack",
+    "status": "manual_required",
+    "attempts": 4,
+    "route": "secondary",
+    "needs_review": true
+  },
+  {
+    "id": "already-awake",
+    "status": "already_awake",
+    "attempts": 0,
+    "route": "none",
+    "needs_review": false
+  }
+]

@@ -1,0 +1,85 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "mode",
+    "results",
+    "blocks"
+  ],
+  "properties": {
+    "mode": {
+      "const": "simulation"
+    },
+    "results": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "attempts",
+          "route",
+          "needs_review"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "awake",
+              "already_awake",
+              "rejected_auth",
+              "rejected_expired",
+              "rejected_replay",
+              "manual_required",
+              "relay_unavailable"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "route": {
+            "enum": [
+              "none",
+              "primary",
+              "secondary"
+            ]
+          },
+          "needs_review": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "text"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "heading",
+              "paragraph"
+            ]
+          },
+          "level": {
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -12,3 +12,4 @@ consilium-storage.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 anyhow.workspace = true
+tempfile = "3"

@@ -1,0 +1,211 @@
+{
+  "format": "consilium-network",
+  "version": 1,
+  "network": {
+    "schema_version": 1,
+    "id": "wake-lab-reference",
+    "name": "Phone wake lab — reference simulation",
+    "limits": {
+      "concurrency": 2,
+      "iterations": 5,
+      "model_calls": 8,
+      "timeout_seconds": 300
+    },
+    "nodes": [
+      {
+        "id": "read",
+        "kind": "file_read",
+        "title": "Read scenarios",
+        "config": {
+          "binding_id": "wake-input",
+          "format": "json"
+        },
+        "position": {
+          "x": 0,
+          "y": 160
+        }
+      },
+      {
+        "id": "simulate",
+        "kind": "process",
+        "title": "Simulate relay decisions",
+        "config": {
+          "executable_binding": "node-runtime",
+          "extension": "js",
+          "source": "// Deterministic test double. No networking, filesystem writes, waiting or hardware control.\nconst fs = require(\"node:fs\");\nconst input = JSON.parse(fs.readFileSync(0, \"utf8\"));\nif (!input || input.mode !== \"simulation\" || !Array.isArray(input.scenarios))\n  throw Error(\"Simulation input required\");\nif (input.scenarios.length > 100) throw Error(\"At most 100 scenarios\");\nconst policy = input.policy;\nif (\n  !policy ||\n  !Number.isInteger(policy.primary_attempts) ||\n  policy.primary_attempts < 1 ||\n  policy.primary_attempts > 3\n)\n  throw Error(\"Primary attempts must be 1..3\");\nif (\n  !Number.isInteger(policy.max_request_age_seconds) ||\n  policy.max_request_age_seconds < 1 ||\n  policy.max_request_age_seconds > 300\n)\n  throw Error(\"Invalid request lifetime\");\nconst seen = new Set();\nconst results = input.scenarios.map((s) => {\n  if (\n    typeof s.id !== \"string\" ||\n    typeof s.nonce !== \"string\" ||\n    !Number.isFinite(s.age_seconds)\n  )\n    throw Error(\"Malformed scenario\");\n  const result = {\n    id: s.id,\n    status: \"\",\n    attempts: 0,\n    route: \"none\",\n    needs_review: false,\n  };\n  const stop = (status, review = false) =>\n    Object.assign(result, { status, needs_review: review });\n  if (\n    s.signature_valid !== true ||\n    !policy.allowed_devices.includes(s.device_id)\n  )\n    return stop(\"rejected_auth\");\n  if (s.age_seconds < 0 || s.age_seconds > policy.max_request_age_seconds)\n    return stop(\"rejected_expired\");\n  if (seen.has(s.nonce)) return stop(\"rejected_replay\");\n  seen.add(s.nonce); // Only authenticated, timely requests enter the simulated replay store.\n  if (s.already_awake === true) return stop(\"already_awake\");\n  if (s.wake_supported !== true || s.power_available !== true)\n    return stop(\"manual_required\", true);\n  if (s.primary_relay_online === true) {\n    result.route = \"primary\";\n    for (let i = 1; i <= policy.primary_attempts; i++) {\n      result.attempts++;\n      if (s.primary_ack_attempt === i) return stop(\"awake\");\n    }\n  }\n  if (policy.secondary_enabled === true && s.secondary_relay_online === true) {\n    result.route = \"secondary\";\n    result.attempts++;\n    if (s.secondary_ack === true) return stop(\"awake\");\n  }\n  return stop(result.attempts ? \"manual_required\" : \"relay_unavailable\", true);\n});\nconst blocks = [\n  {\n    kind: \"heading\",\n    level: 1,\n    text: \"Phone wake simulation — no hardware contacted\",\n  },\n  ...results.map((r) => ({\n    kind: \"paragraph\",\n    text: `${r.id}: ${r.status}; ${r.attempts} simulated attempts; route ${r.route}; review ${r.needs_review}.`,\n  })),\n];\nprocess.stdout.write(JSON.stringify({ mode: \"simulation\", results, blocks }));\n",
+          "args": [],
+          "timeout_seconds": 30
+        },
+        "position": {
+          "x": 240,
+          "y": 160
+        }
+      },
+      {
+        "id": "validate",
+        "kind": "validate",
+        "title": "Validate output",
+        "config": {
+          "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "mode",
+              "results",
+              "blocks"
+            ],
+            "properties": {
+              "mode": {
+                "const": "simulation"
+              },
+              "results": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "status",
+                    "attempts",
+                    "route",
+                    "needs_review"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "awake",
+                        "already_awake",
+                        "rejected_auth",
+                        "rejected_expired",
+                        "rejected_replay",
+                        "manual_required",
+                        "relay_unavailable"
+                      ]
+                    },
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4
+                    },
+                    "route": {
+                      "enum": [
+                        "none",
+                        "primary",
+                        "secondary"
+                      ]
+                    },
+                    "needs_review": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "blocks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "kind",
+                    "text"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "heading",
+                        "paragraph"
+                      ]
+                    },
+                    "level": {
+                      "type": "integer"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "position": {
+          "x": 480,
+          "y": 160
+        }
+      },
+      {
+        "id": "approve",
+        "kind": "approval",
+        "title": "Review simulated results",
+        "config": {},
+        "position": {
+          "x": 720,
+          "y": 160
+        }
+      },
+      {
+        "id": "report",
+        "kind": "document_write",
+        "title": "Write lab report",
+        "config": {
+          "title": "Phone wake simulation report"
+        },
+        "position": {
+          "x": 960,
+          "y": 160
+        }
+      },
+      {
+        "id": "output",
+        "kind": "output",
+        "title": "Validated simulation result",
+        "config": {},
+        "position": {
+          "x": 960,
+          "y": 400
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "read-simulate",
+        "source": "read",
+        "target": "simulate",
+        "source_port": "out",
+        "target_port": "in"
+      },
+      {
+        "id": "simulate-validate",
+        "source": "simulate",
+        "target": "validate",
+        "source_port": "out",
+        "target_port": "in"
+      },
+      {
+        "id": "validate-approve",
+        "source": "validate",
+        "target": "approve",
+        "source_port": "out",
+        "target_port": "in"
+      },
+      {
+        "id": "approve-report",
+        "source": "approve",
+        "target": "report",
+        "source_port": "out",
+        "target_port": "in"
+      },
+      {
+        "id": "approve-output",
+        "source": "approve",
+        "target": "output",
+        "source_port": "out",
+        "target_port": "in"
+      }
+    ]
+  }
+}
