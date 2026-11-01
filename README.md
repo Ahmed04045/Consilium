@@ -6,6 +6,61 @@ A Windows workspace for calendars, documents, conversations and visual AI workfl
 
 The installed application is named **Consilium Next** and uses `%LOCALAPPDATA%\Consilium Next`. This preserves the existing app identity, data and credential namespace when upgrading the tested builds.
 
+## Demo
+
+[![Consilium promotional film — connected workflows](docs/media/promo/slide-5.png)](https://github.com/Ahmed04045/Consilium/releases/download/v3.0.0/consilium-promo.mp4)
+
+[Watch or download the promotional film (MP4)](https://github.com/Ahmed04045/Consilium/releases/download/v3.0.0/consilium-promo.mp4).
+
+The galleries below contain the original promotional slides and document pages. They were created during the alpha and retain their original version labels; the current stable release is **3.0.0**.
+
+<details>
+<summary>Product overview — 10 slides</summary>
+
+<table>
+<tr>
+<td><a href="docs/media/promo/slide-1.png"><img src="docs/media/promo/slide-1.png" width="420" alt="Product overview" /></a><br />Product overview</td>
+<td><a href="docs/media/promo/slide-2.png"><img src="docs/media/promo/slide-2.png" width="420" alt="One workspace for related work" /></a><br />One workspace for related work</td>
+</tr>
+<tr>
+<td><a href="docs/media/promo/slide-3.png"><img src="docs/media/promo/slide-3.png" width="420" alt="Calendars and task workspaces" /></a><br />Calendars and task workspaces</td>
+<td><a href="docs/media/promo/slide-4.png"><img src="docs/media/promo/slide-4.png" width="420" alt="Assistant conversations" /></a><br />Assistant conversations</td>
+</tr>
+<tr>
+<td><a href="docs/media/promo/slide-5.png"><img src="docs/media/promo/slide-5.png" width="420" alt="Connected workflows" /></a><br />Connected workflows</td>
+<td><a href="docs/media/promo/slide-6.png"><img src="docs/media/promo/slide-6.png" width="420" alt="Review and bounded automation" /></a><br />Review and bounded automation</td>
+</tr>
+<tr>
+<td><a href="docs/media/promo/slide-7.png"><img src="docs/media/promo/slide-7.png" width="420" alt="Local data and portable projects" /></a><br />Local data and portable projects</td>
+<td><a href="docs/media/promo/slide-8.png"><img src="docs/media/promo/slide-8.png" width="420" alt="Desktop and CLI architecture" /></a><br />Desktop and CLI architecture</td>
+</tr>
+<tr>
+<td><a href="docs/media/promo/slide-9.png"><img src="docs/media/promo/slide-9.png" width="420" alt="Alpha status and boundaries" /></a><br />Alpha status and boundaries</td>
+<td><a href="docs/media/promo/slide-10.png"><img src="docs/media/promo/slide-10.png" width="420" alt="The promotional film" /></a><br />The promotional film</td>
+</tr>
+</table>
+
+</details>
+
+<details>
+<summary>Product description — 5 pages</summary>
+
+<table>
+<tr>
+<td><a href="docs/media/promo/word-1.png"><img src="docs/media/promo/word-1.png" width="420" alt="Product description" /></a><br />Product description</td>
+<td><a href="docs/media/promo/word-2.png"><img src="docs/media/promo/word-2.png" width="420" alt="Workspace capabilities" /></a><br />Workspace capabilities</td>
+</tr>
+<tr>
+<td><a href="docs/media/promo/word-3.png"><img src="docs/media/promo/word-3.png" width="420" alt="Networks and automation" /></a><br />Networks and automation</td>
+<td><a href="docs/media/promo/word-4.png"><img src="docs/media/promo/word-4.png" width="420" alt="Data and architecture" /></a><br />Data and architecture</td>
+</tr>
+<tr>
+<td><a href="docs/media/promo/word-5.png"><img src="docs/media/promo/word-5.png" width="420" alt="Promotional film and source guide" /></a><br />Promotional film and source guide</td>
+</tr>
+</table>
+
+</details>
+
 ## What you can do
 
 - Organize calendars, recurring tasks, goal spans, labels and checklist steps.
