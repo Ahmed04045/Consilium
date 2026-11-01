@@ -10,6 +10,7 @@ import {
   FileText,
   MessageSquare,
   Folder,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   useWorkspace,
@@ -17,6 +18,7 @@ import {
   call,
   Data,
   colors,
+  colorInk,
   localDate,
   uid,
   taskDefault,
@@ -390,14 +392,12 @@ export function TaskForm({
         </label>
         <label>
           Color
-          <select
-            value={t.color}
+          <input
+            type="color"
+            aria-label="Task color"
+            value={colors[t.color] || t.color}
             onChange={(e) => update("color", e.target.value)}
-          >
-            {Object.keys(colors).map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
+          />
         </label>
         {occurrence && (
           <label>
@@ -448,7 +448,7 @@ export function CalendarView({ id }: { id: string }) {
     [view, setView] = useState(readAppearance().defaultView),
     [items, setItems] = useState<Data[]>([]),
     [hidden, setHidden] = useState<string[]>([]),
-    [completed, setCompleted] = useState(true),
+    [completed, setCompleted] = useState(readAppearance().showCompleted),
     [archived, setArchived] = useState(false),
     [labelsOpen, setLabelsOpen] = useState(false),
     [label, setLabel] = useState<Data>({
@@ -528,6 +528,9 @@ export function CalendarView({ id }: { id: string }) {
         style={
           {
             "--event": colors[l?.color || t.color] || l?.color || t.color,
+            "--event-ink": colorInk(
+              colors[l?.color || t.color] || l?.color || t.color,
+            ),
           } as React.CSSProperties
         }
         key={o.id}
@@ -561,12 +564,29 @@ export function CalendarView({ id }: { id: string }) {
     <div className="nx-calendar">
       <header className="nx-toolbar">
         <h1>{calendar.name}</h1>
-        <ProjectFiles kind="calendar" id={id} />
+        <details className="nx-network-menu">
+          <summary aria-label="Calendar actions">
+            <MoreHorizontal size={19} />
+          </summary>
+          <div>
+            <ProjectFiles kind="calendar" id={id} />
+          </div>
+        </details>
         <button onClick={() => setDate(localDate())}>Today</button>
-        <button aria-label="Previous period" onClick={() => move(-1)}>
+        <button
+          className="nx-navigation-button"
+          title="Previous period"
+          aria-label="Previous period"
+          onClick={() => move(-1)}
+        >
           <ChevronLeft size={18} />
         </button>
-        <button aria-label="Next period" onClick={() => move(1)}>
+        <button
+          className="nx-navigation-button"
+          title="Next period"
+          aria-label="Next period"
+          onClick={() => move(1)}
+        >
           <ChevronRight size={18} />
         </button>
         <strong>
@@ -799,14 +819,12 @@ export function CalendarView({ id }: { id: string }) {
             </label>
             <label>
               Color
-              <select
-                value={label.color}
+              <input
+                type="color"
+                aria-label="Label color"
+                value={colors[label.color] || label.color}
                 onChange={(e) => setLabel({ ...label, color: e.target.value })}
-              >
-                {Object.keys(colors).map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
+              />
             </label>
             <label className="nx-check">
               <input
@@ -964,7 +982,7 @@ export function TaskView({ id }: { id: string }) {
       <div className="nx-actions">
         <button onClick={() => void documentFor(scope, t.title)}>
           <FileText size={17} />
-          Main document
+          Open full-page document
         </button>
         <button
           onClick={() =>
@@ -1034,36 +1052,72 @@ export function TaskView({ id }: { id: string }) {
             <small>{c.value.start_date}</small>
           </button>
         ))}
-      <h2>
-        <Folder size={17} /> Linked folder
-      </h2>
-      <select
-        aria-label="Linked folder"
-        value={
-          w.data.layout.find((r) => r.value.id === `folder-${scope}`)?.value
-            .binding_id || ""
-        }
-        onChange={(e) =>
-          void w
-            .save("layout", {
-              id: `folder-${scope}`,
-              binding_id: e.target.value,
-            })
-            .catch(w.error)
-        }
-      >
-        <option value="">No folder linked</option>
-        {w.data.binding
-          .filter((r) => r.value.kind === "folder")
-          .map((r) => (
-            <option key={r.value.id} value={r.value.id}>
-              {r.value.name}
-            </option>
-          ))}
-      </select>
-      <p className="nx-muted">
-        Folder links do not read or upload contents. Add bindings in Settings.
-      </p>
+      <section className="nx-task-folder">
+        <h2>
+          <Folder size={17} /> Task folder
+        </h2>
+        <p className="nx-muted">
+          Link a folder on this device for this task. The link does not read or
+          upload files; add a file to a conversation when you want the AI to
+          inspect its contents.
+        </p>
+        <div className="nx-actions">
+          <select
+            aria-label="Task folder"
+            value={
+              w.data.layout.find((r) => r.value.id === `folder-${scope}`)?.value
+                .binding_id || ""
+            }
+            onChange={(e) =>
+              void w
+                .save("layout", {
+                  id: `folder-${scope}`,
+                  binding_id: e.target.value,
+                })
+                .catch(w.error)
+            }
+          >
+            <option value="">No task folder</option>
+            {w.data.binding
+              .filter((r) => r.value.kind === "folder")
+              .map((r) => (
+                <option key={r.value.id} value={r.value.id}>
+                  {r.value.name} · {r.value.path}
+                </option>
+              ))}
+          </select>
+          <button
+            onClick={() => {
+              const binding = {
+                id: uid(),
+                name: t.title,
+                kind: "folder",
+                path: "",
+                writable: false,
+              };
+              void call("next_pick_path", binding)
+                .then(async (picked) => {
+                  if (!picked.path) return;
+                  const name =
+                    picked.path.split(/[\\/]/).filter(Boolean).at(-1) ||
+                    t.title;
+                  await w.save(
+                    "binding",
+                    { ...binding, name, path: picked.path },
+                    0,
+                  );
+                  await w.save("layout", {
+                    id: `folder-${scope}`,
+                    binding_id: binding.id,
+                  });
+                })
+                .catch(w.error);
+            }}
+          >
+            Choose folder…
+          </button>
+        </div>
+      </section>
       {edit && (
         <TaskForm
           initial={original ? { ...t, recurrence: r.value.recurrence } : t}

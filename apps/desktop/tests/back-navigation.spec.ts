@@ -1,0 +1,21 @@
+import {test,expect} from '@playwright/test';
+test('back controls align with headers and return from settings',async({page})=>{
+ await page.goto('/');await page.getByRole('complementary',{name:'Workspace navigation'}).getByRole('button',{name:'Create',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Create',exact:true});
+ await dialog.getByRole('button',{name:'Calendar',exact:true}).click();
+ const back=dialog.getByRole('button',{name:'Back to create options'});
+ const box=await back.boundingBox(), heading=await dialog.getByRole('heading',{name:'Create',exact:true}).boundingBox();
+ expect(box!.x+box!.width).toBeLessThan(heading!.x);
+ expect(Math.abs(box!.y+box!.height/2-heading!.y-heading!.height/2)).toBeLessThan(2);
+ await page.screenshot({path:'../../docs/screenshots/next-create-back.png'});
+ await back.click();await expect(dialog.getByRole('button',{name:'Calendar',exact:true})).toBeVisible();await page.keyboard.press('Escape');
+ await page.keyboard.press('Control+,');
+ await expect(page.getByRole('button',{name:'Back',exact:true})).toBeEnabled();
+ await page.getByRole('button',{name:'Back',exact:true}).click();await expect(page.locator('.nx-body')).toBeVisible();
+ await page.keyboard.press('Control+,');await page.keyboard.press('Alt+ArrowLeft');await expect(page.locator('.nx-body')).toBeVisible();
+ await page.setViewportSize({width:940,height:640});await page.keyboard.press('Control+,');
+ await page.locator('.nx-settings-nav').evaluate(el=>{el.scrollTop=el.scrollHeight});
+ await expect(page.getByRole('button',{name:'Back to app'})).toBeInViewport();
+ await page.screenshot({path:'../../docs/screenshots/next-settings-back.png'});
+ await page.getByRole('button',{name:'Back to app'}).click();await expect(page.locator('.nx-body')).toBeVisible();
+});

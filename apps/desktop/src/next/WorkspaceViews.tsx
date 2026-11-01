@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Plus,
   Search,
@@ -9,7 +9,11 @@ import {
   Network,
   FileText,
   MessageSquare,
+  ArrowUpRight,
+  FolderOpen,
+  GripVertical,
 } from "lucide-react";
+import { native } from "../api";
 import { Customization } from "../Customization";
 import { openProject } from "./ProjectFiles";
 import { Addons } from "./Addons";
@@ -97,15 +101,32 @@ export function HomeView() {
     task: CalendarDays,
     run: Network,
   };
+  const recent = ["calendar", "network", "document", "thread"]
+    .flatMap((kind) =>
+      (w.data[kind] || [])
+        .filter((r) => !r.value.deleted)
+        .map((r) => ({ ...r, kind })),
+    )
+    .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+  const hasItems = recent.length > 0;
   return (
-    <div className={`nx-home nx-${layout.density}`}>
+    <div
+      className={`nx-home nx-${layout.density} ${query ? "nx-home-searching" : ""}`}
+    >
       <header className="nx-toolbar">
-        <h1>Home</h1>
+        <div>
+          <p className="nx-home-eyebrow">Workspace</p>
+          <h1>Home</h1>
+        </div>
         <span className="nx-spacer" />
         <button onClick={() => setEditing(!editing)}>
           {editing ? "Done" : "Customize"}
         </button>
-        <button className="nx-primary" onClick={() => w.create()}>
+        <button onClick={() => void openProject(w).catch(w.error)}>
+          <FolderOpen size={16} />
+          Open project
+        </button>
+        <button className="nx-home-create" onClick={() => w.create()}>
           <Plus size={16} />
           Create
         </button>
@@ -114,14 +135,70 @@ export function HomeView() {
         <Search size={18} />
         <input
           aria-label="Search from Home"
-          placeholder="Search calendars, documents and conversations"
+          placeholder="Find a calendar, network, document or conversation"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
       {query && <SearchView query={query} onChoose={() => setQuery("")} />}
+      {!query && !editing && !hasItems && (
+        <section className="nx-home-start">
+          <div className="nx-start-icons">
+            <CalendarDays size={24} />
+            <Network size={24} />
+            <FileText size={24} />
+          </div>
+          <h2>Create your first workspace</h2>
+          <p>Start with a calendar or a network, or open a saved project.</p>
+          <button onClick={() => w.create()}>
+            <Plus size={16} />
+            Create workspace
+          </button>
+        </section>
+      )}
+      {!query && !editing && hasItems && (
+        <section className="nx-recent-section" aria-label="Recent work">
+          <header>
+            <h2>Recent work</h2>
+            <small>Last updated</small>
+          </header>
+          <div className="nx-recent-grid">
+            {recent.slice(0, 4).map((r) => {
+              const Icon = icons[r.kind];
+              return (
+                <button
+                  className="nx-recent-card"
+                  key={`${r.kind}:${r.value.id}`}
+                  onClick={() =>
+                    w.open(r.kind, r.value.id, r.value.name || r.value.title)
+                  }
+                >
+                  <div>
+                    <Icon size={19} />
+                    <ArrowUpRight size={14} />
+                  </div>
+                  <strong>{r.value.name || r.value.title}</strong>
+                  <small>
+                    {
+                      {
+                        calendar: "Calendar",
+                        network: "Network",
+                        document: "Document",
+                        thread: "Conversation",
+                      }[r.kind]
+                    }
+                  </small>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {editing && (
         <div className="nx-layout-controls">
+          <p>
+            Drag a card to reposition it. Adjust its width and height below.
+          </p>
           <label>
             Presentation
             <select
@@ -194,258 +271,282 @@ export function HomeView() {
             ))}
         </div>
       )}
-      <section className="nx-pins">
-        <h2>Pinned</h2>
-        {layout.pinned.length ? (
-          layout.pinned.map((key: string) => {
-            const [kind, id] = key.split(":");
-            const r = row(w.data, kind, id);
-            return (
-              r && (
-                <button
-                  key={key}
-                  onClick={() =>
-                    w.open(kind, id, r.value.name || r.value.title)
-                  }
-                >
-                  <Pin size={14} />
-                  {r.value.name || r.value.title}
-                </button>
-              )
-            );
-          })
-        ) : (
-          <small>Pin items from the sections below.</small>
-        )}
-      </section>
-      <div
-        className={`nx-widgets ${layout.presentation === "list" ? "list" : ""}`}
-      >
-        {layout.widgets
-          .filter((x: Data) => x.visible)
-          .map((widget: Data) => {
-            const Icon = icons[widget.kind] || FileText;
-            const records =
-              w.data[widget.kind]
-                ?.filter(
-                  (r) =>
-                    !r.value.deleted &&
-                    (!widget.object_id || r.value.id === widget.object_id),
+      {(editing || layout.pinned.length > 0) && (
+        <section className="nx-pins">
+          <h2>Pinned</h2>
+          {layout.pinned.length ? (
+            layout.pinned.map((key: string) => {
+              const [kind, id] = key.split(":");
+              const r = row(w.data, kind, id);
+              return (
+                r && (
+                  <button
+                    key={key}
+                    onClick={() =>
+                      w.open(kind, id, r.value.name || r.value.title)
+                    }
+                  >
+                    <Pin size={14} />
+                    {r.value.name || r.value.title}
+                  </button>
                 )
-                .slice()
-                .reverse()
-                .slice(0, 8) || [];
-            return (
-              <section
-                key={widget.id}
-                className="nx-widget"
-                draggable={editing}
-                onDragStart={() => setDrag(widget.id)}
-                onDragOver={(e) => {
-                  if (editing) e.preventDefault();
-                }}
-                onDrop={() => {
-                  const from = layout.widgets.findIndex(
-                      (x: Data) => x.id === drag,
-                    ),
-                    to = layout.widgets.findIndex(
-                      (x: Data) => x.id === widget.id,
-                    );
-                  move(drag, to - from);
-                }}
-                style={{
-                  gridColumn: `span ${layout.presentation === "list" ? 4 : widget.width}`,
-                  minHeight: widget.height * 150,
-                }}
-              >
-                <header>
-                  <h2>
-                    <Icon size={18} />
-                    {widget.title}
-                  </h2>
-                  {editing && (
-                    <>
-                      <button
-                        aria-label={`Move ${widget.title} earlier`}
-                        onClick={() => move(widget.id, -1)}
-                      >
-                        <ArrowUp size={14} />
-                      </button>
-                      <button
-                        aria-label={`Move ${widget.title} later`}
-                        onClick={() => move(widget.id, 1)}
-                      >
-                        <ArrowDown size={14} />
-                      </button>
-                      <button
-                        onClick={() =>
-                          update({
-                            ...layout,
-                            widgets: layout.widgets.map((x: Data) =>
-                              x.id === widget.id ? { ...x, visible: false } : x,
-                            ),
-                          })
-                        }
-                      >
-                        Hide
-                      </button>
-                    </>
-                  )}
-                </header>
-                {editing && (
-                  <div className="nx-widget-controls">
-                    <label>
-                      Width
-                      <input
-                        type="range"
-                        min="1"
-                        max="4"
-                        value={widget.width}
-                        onChange={(e) =>
-                          update({
-                            ...layout,
-                            widgets: layout.widgets.map((x: Data) =>
-                              x.id === widget.id
-                                ? { ...x, width: Number(e.target.value) }
-                                : x,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Height
-                      <input
-                        type="range"
-                        min="1"
-                        max="4"
-                        value={widget.height}
-                        onChange={(e) =>
-                          update({
-                            ...layout,
-                            widgets: layout.widgets.map((x: Data) =>
-                              x.id === widget.id
-                                ? { ...x, height: Number(e.target.value) }
-                                : x,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Reference
-                      <select
-                        value={widget.object_id}
-                        onChange={(e) =>
-                          update({
-                            ...layout,
-                            widgets: layout.widgets.map((x: Data) =>
-                              x.id === widget.id
-                                ? { ...x, object_id: e.target.value }
-                                : x,
-                            ),
-                          })
-                        }
-                      >
-                        <option value="">Recent items</option>
-                        {w.data[widget.kind]?.map((r) => (
-                          <option value={r.value.id} key={r.value.id}>
-                            {r.value.name || r.value.title || r.value.id}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                )}
-                {records.length ? (
-                  records.map((r) => (
-                    <div className="nx-home-item" key={r.value.id}>
-                      <button
-                        onClick={() =>
-                          w.open(
-                            widget.kind === "run" ? "network" : widget.kind,
-                            widget.kind === "run"
-                              ? r.value.network_id
-                              : r.value.id,
-                            r.value.name || r.value.title,
-                          )
-                        }
-                      >
-                        <span>
-                          {r.value.name || r.value.title || r.value.status}
-                        </span>
-                        <small>
-                          {widget.kind === "document"
-                            ? r.value.text?.slice(0, 100)
-                            : widget.kind === "task"
-                              ? r.value.start_date
-                              : widget.kind === "run"
-                                ? r.value.started_at
-                                : ""}
-                        </small>
-                      </button>
-                      <button
-                        aria-label={`Pin ${r.value.name || r.value.title}`}
-                        onClick={() => {
-                          const key = `${widget.kind}:${r.value.id}`;
-                          update({
-                            ...layout,
-                            pinned: layout.pinned.includes(key)
-                              ? layout.pinned.filter((x: string) => x !== key)
-                              : [...layout.pinned, key],
-                          });
-                        }}
-                      >
-                        <Pin size={13} />
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="nx-muted">
-                    No {widget.title.toLowerCase()} yet.
-                  </p>
-                )}
-                {widget.kind === "calendar" && widget.object_id && (
-                  <div className="nx-mini-calendar">
-                    {Array.from(
-                      {
-                        length: new Date(
-                          new Date().getFullYear(),
-                          new Date().getMonth(),
-                          1,
-                        ).getDay(),
-                      },
-                      (_, i) => (
-                        <span key={`blank-${i}`} />
-                      ),
-                    )}
-                    {Array.from(
-                      {
-                        length: new Date(
-                          new Date().getFullYear(),
-                          new Date().getMonth() + 1,
-                          0,
-                        ).getDate(),
-                      },
-                      (_, i) => (
+              );
+            })
+          ) : (
+            <small>Pin items from the sections below.</small>
+          )}
+        </section>
+      )}
+      {(editing || hasItems) && (
+        <>
+          <h2 className="nx-workspace-heading">Your workspace</h2>
+          <div
+            className={`nx-widgets ${layout.presentation === "list" ? "list" : ""}`}
+          >
+            {layout.widgets
+              .filter((x: Data) => x.visible)
+              .map((widget: Data) => {
+                const Icon = icons[widget.kind] || FileText;
+                const records =
+                  w.data[widget.kind]
+                    ?.filter(
+                      (r) =>
+                        !r.value.deleted &&
+                        (!widget.object_id || r.value.id === widget.object_id),
+                    )
+                    .slice()
+                    .sort((a, b) =>
+                      (b.updated_at || "").localeCompare(a.updated_at || ""),
+                    )
+                    .slice(0, 8) || [];
+                return (
+                  <section
+                    key={widget.id}
+                    className="nx-widget"
+                    draggable={editing}
+                    onDragStart={() => setDrag(widget.id)}
+                    onDragOver={(e) => {
+                      if (editing) e.preventDefault();
+                    }}
+                    onDrop={() => {
+                      const from = layout.widgets.findIndex(
+                          (x: Data) => x.id === drag,
+                        ),
+                        to = layout.widgets.findIndex(
+                          (x: Data) => x.id === widget.id,
+                        );
+                      move(drag, to - from);
+                    }}
+                    style={{
+                      gridColumn: `span ${layout.presentation === "list" ? 4 : widget.width}`,
+                      minHeight: widget.height * 150,
+                    }}
+                  >
+                    <header>
+                      {editing && (
                         <span
-                          key={i}
-                          className={
-                            Number(localDate().slice(-2)) === i + 1
-                              ? "today"
-                              : ""
-                          }
+                          className="nx-drag-handle"
+                          title="Drag to reposition"
                         >
-                          {i + 1}
+                          <GripVertical size={16} />
                         </span>
-                      ),
+                      )}
+                      <h2>
+                        <Icon size={18} />
+                        {widget.title}
+                      </h2>
+                      {editing && (
+                        <>
+                          <button
+                            aria-label={`Move ${widget.title} earlier`}
+                            onClick={() => move(widget.id, -1)}
+                          >
+                            <ArrowUp size={14} />
+                          </button>
+                          <button
+                            aria-label={`Move ${widget.title} later`}
+                            onClick={() => move(widget.id, 1)}
+                          >
+                            <ArrowDown size={14} />
+                          </button>
+                          <button
+                            onClick={() =>
+                              update({
+                                ...layout,
+                                widgets: layout.widgets.map((x: Data) =>
+                                  x.id === widget.id
+                                    ? { ...x, visible: false }
+                                    : x,
+                                ),
+                              })
+                            }
+                          >
+                            Hide
+                          </button>
+                        </>
+                      )}
+                    </header>
+                    {editing && (
+                      <div className="nx-widget-controls">
+                        <label>
+                          Width
+                          <input
+                            type="range"
+                            min="1"
+                            max="4"
+                            value={widget.width}
+                            onChange={(e) =>
+                              update({
+                                ...layout,
+                                widgets: layout.widgets.map((x: Data) =>
+                                  x.id === widget.id
+                                    ? { ...x, width: Number(e.target.value) }
+                                    : x,
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Height
+                          <input
+                            type="range"
+                            min="1"
+                            max="4"
+                            value={widget.height}
+                            onChange={(e) =>
+                              update({
+                                ...layout,
+                                widgets: layout.widgets.map((x: Data) =>
+                                  x.id === widget.id
+                                    ? { ...x, height: Number(e.target.value) }
+                                    : x,
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Reference
+                          <select
+                            value={widget.object_id}
+                            onChange={(e) =>
+                              update({
+                                ...layout,
+                                widgets: layout.widgets.map((x: Data) =>
+                                  x.id === widget.id
+                                    ? { ...x, object_id: e.target.value }
+                                    : x,
+                                ),
+                              })
+                            }
+                          >
+                            <option value="">Recent items</option>
+                            {w.data[widget.kind]?.map((r) => (
+                              <option value={r.value.id} key={r.value.id}>
+                                {r.value.name || r.value.title || r.value.id}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
                     )}
-                  </div>
-                )}
-              </section>
-            );
-          })}
-      </div>
+                    {records.length ? (
+                      records.map((r) => (
+                        <div className="nx-home-item" key={r.value.id}>
+                          <button
+                            onClick={() =>
+                              w.open(
+                                widget.kind === "run" ? "network" : widget.kind,
+                                widget.kind === "run"
+                                  ? r.value.network_id
+                                  : r.value.id,
+                                r.value.name || r.value.title,
+                              )
+                            }
+                          >
+                            <span>
+                              {r.value.name || r.value.title || r.value.status}
+                            </span>
+                            <small>
+                              {widget.kind === "document"
+                                ? r.value.text?.slice(0, 100)
+                                : widget.kind === "task"
+                                  ? r.value.start_date
+                                  : widget.kind === "run"
+                                    ? r.value.started_at
+                                    : ""}
+                            </small>
+                          </button>
+                          <button
+                            aria-label={`Pin ${r.value.name || r.value.title}`}
+                            aria-pressed={layout.pinned.includes(
+                              `${widget.kind}:${r.value.id}`,
+                            )}
+                            onClick={() => {
+                              const key = `${widget.kind}:${r.value.id}`;
+                              update({
+                                ...layout,
+                                pinned: layout.pinned.includes(key)
+                                  ? layout.pinned.filter(
+                                      (x: string) => x !== key,
+                                    )
+                                  : [...layout.pinned, key],
+                              });
+                            }}
+                          >
+                            <Pin size={13} />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="nx-muted">
+                        No {widget.title.toLowerCase()} yet.
+                      </p>
+                    )}
+                    {widget.kind === "calendar" && widget.object_id && (
+                      <div className="nx-mini-calendar">
+                        {Array.from(
+                          {
+                            length: new Date(
+                              new Date().getFullYear(),
+                              new Date().getMonth(),
+                              1,
+                            ).getDay(),
+                          },
+                          (_, i) => (
+                            <span key={`blank-${i}`} />
+                          ),
+                        )}
+                        {Array.from(
+                          {
+                            length: new Date(
+                              new Date().getFullYear(),
+                              new Date().getMonth() + 1,
+                              0,
+                            ).getDate(),
+                          },
+                          (_, i) => (
+                            <span
+                              key={i}
+                              className={
+                                Number(localDate().slice(-2)) === i + 1
+                                  ? "today"
+                                  : ""
+                              }
+                            >
+                              {i + 1}
+                            </span>
+                          ),
+                        )}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -473,7 +574,11 @@ export function SearchView({
     )
     .slice(0, 40);
   return (
-    <div className={external === undefined ? "nx-page" : "nx-inline-search"}>
+    <div
+      className={
+        external === undefined ? "nx-page nx-search-page" : "nx-inline-search"
+      }
+    >
       {external === undefined && (
         <>
           <h1>Search</h1>
@@ -504,7 +609,7 @@ export function SearchView({
     </div>
   );
 }
-export function SettingsView() {
+export function SettingsView({ page = "models" }: { page?: string }) {
   const w = useWorkspace(),
     [profile, setProfile] = useState<Data>({
       id: uid(),
@@ -530,7 +635,17 @@ export function SettingsView() {
     [context, setContext] = useState(
       row(w.data, "layout", "context")?.value.text || "",
     );
+  const contextRevision = useRef(
+    row(w.data, "layout", "context")?.revision || 0,
+  );
+  const [contextStatus, setContextStatus] = useState("");
+  const [savingContext, setSavingContext] = useState(false);
+  const [storageStatus, setStorageStatus] = useState("");
   function loadKeys() {
+    if (!native) {
+      setKeys({ keys: [] });
+      return;
+    }
     if (["gemini", "openrouter"].includes(profile.provider))
       void call("named_keys", { provider: profile.provider, action: "list" })
         .then(setKeys)
@@ -539,9 +654,22 @@ export function SettingsView() {
   }
   useEffect(loadKeys, [profile.provider]);
   return (
-    <div className="nx-page nx-settings">
-      <h1>Settings</h1>
-      <section>
+    <div
+      className="nx-page nx-settings"
+      hidden={
+        ![
+          "models",
+          "context",
+          "files",
+          "appearance",
+          "addons",
+          "storage",
+          "personal",
+          "data",
+        ].includes(page)
+      }
+    >
+      <section hidden={page !== "models"}>
         <h2>Model profiles</h2>
         <p className="nx-muted">
           Each conversation and agent chooses a profile independently.
@@ -694,7 +822,7 @@ export function SettingsView() {
                     .catch(w.error)
                 }
               >
-                Save key in Windows Credential Manager
+                Save API key
               </button>
             </details>
           </>
@@ -738,36 +866,64 @@ export function SettingsView() {
           <span role="status">{status}</span>
         </div>
       </section>
-      <section>
+      <section hidden={!["context", "personal"].includes(page)}>
         <h2>Personal context</h2>
         <p className="nx-muted">
-          Confirmed preferences used in scoped conversations. Folder contents
-          are never included automatically.
+          Tell the assistant about your goals, preferences and constraints.
+          These details inform your conversations; connected folders are shared
+          only when you choose.
         </p>
         <textarea
+          aria-label="Personal context"
           rows={6}
           value={context}
-          onChange={(e) => setContext(e.target.value)}
-        />
-        <button
-          onClick={() => {
-            const old = row(w.data, "layout", "context");
-            void w
-              .save("layout", {
-                id: "context",
-                text: context,
-                history: [
-                  ...(old?.value.history || []),
-                  { at: new Date().toISOString(), text: old?.value.text || "" },
-                ],
-              })
-              .catch(w.error);
+          onChange={(e) => {
+            setContext(e.target.value);
+            setContextStatus("");
           }}
-        >
-          Save context
-        </button>
+        />
+        <div className="nx-actions">
+          <button
+            disabled={savingContext}
+            onClick={() => {
+              const old = row(w.data, "layout", "context");
+              setSavingContext(true);
+              setContextStatus("");
+              void w
+                .save(
+                  "layout",
+                  {
+                    id: "context",
+                    text: context,
+                    history: [
+                      ...(old?.value.history || []),
+                      {
+                        at: new Date().toISOString(),
+                        text: old?.value.text || "",
+                      },
+                    ],
+                  },
+                  contextRevision.current,
+                )
+                .then((r) => {
+                  contextRevision.current = r.revision;
+                  setContextStatus("Context saved");
+                })
+                .catch(w.error)
+                .finally(() => setSavingContext(false));
+            }}
+          >
+            {savingContext ? "Saving…" : "Save context"}
+          </button>
+          <span role="status">{contextStatus}</span>
+        </div>
         <details>
-          <summary>Context history</summary>
+          <summary>Previous context</summary>
+          {!row(w.data, "layout", "context")?.value.history?.length && (
+            <p className="nx-muted">
+              Previous versions will appear here after your first save.
+            </p>
+          )}
           {row(w.data, "layout", "context")?.value.history?.map(
             (h: Data, i: number) => (
               <article key={i}>
@@ -778,10 +934,11 @@ export function SettingsView() {
           )}
         </details>
       </section>
-      <section>
-        <h2>Local bindings</h2>
+      <section hidden={!["files", "data"].includes(page)}>
+        <h2>Connected files & folders</h2>
         <p className="nx-muted">
-          Networks use logical references. Local paths stay on this device.
+          Give a file or folder a name to use in workflows. Connecting it does
+          not read or share its contents.
         </p>
         {w.data.binding.map((r) => (
           <button
@@ -828,7 +985,7 @@ export function SettingsView() {
               setBinding({ ...binding, writable: e.target.checked })
             }
           />
-          Allow writes to this file
+          Allow writes to this location
         </label>
         <div className="nx-actions">
           <button
@@ -859,51 +1016,57 @@ export function SettingsView() {
                 .catch(w.error)
             }
           >
-            Save binding
+            Save connection
           </button>
         </div>
       </section>
-      <Customization />
-      <section>
+      <div hidden={page !== "appearance"}>
+        <Customization />
+      </div>
+      <div hidden={page !== "addons"}>
         <Addons />
-        <h2>Preview import & recovery</h2>
+      </div>
+      <section hidden={!["storage", "data"].includes(page)}>
+        <h2>Backups & recovery</h2>
         <p>
-          Consilium Next uses a separate vault and key namespace. Import copies
-          the preview and preserves a recovery archive. Existing preview data is
-          not changed.
+          Create a recovery copy before making major changes. Importing an
+          earlier preview copies its data into this workspace.
         </p>
-        <button
-          disabled={w.data.calendar.length > 0}
-          onClick={() =>
-            void call("next_import_dialog").then(w.refresh).catch(w.error)
-          }
-        >
-          Copy preview vault…
-        </button>
-        <button
-          onClick={() =>
-            void call("backup")
-              .then(() => w.error("Backup created"))
-              .catch(w.error)
-          }
-        >
-          Create backup
-        </button>
-        <button onClick={() => void openProject(w).catch(w.error)}>
-          Open Consilium project…
-        </button>
-        <button onClick={() => download("workspace-records.json", w.data)}>
-          Export local records
-        </button>
-        <button
-          onClick={() =>
-            void call("next_get", { kind: "migration", id: "archive" })
-              .then((r) => download("preview-recovery-archive.json", r.value))
-              .catch(w.error)
-          }
-        >
-          Export migration archive
-        </button>
+        <div className="nx-actions">
+          <button
+            disabled={w.data.calendar.length > 0}
+            onClick={() =>
+              void call("next_import_dialog").then(w.refresh).catch(w.error)
+            }
+          >
+            Copy preview vault…
+          </button>
+          <button
+            onClick={() =>
+              void call("backup")
+                .then(() => setStorageStatus("Backup created"))
+                .catch(w.error)
+            }
+          >
+            Create backup
+          </button>
+          <button onClick={() => void openProject(w).catch(w.error)}>
+            Open Consilium project…
+          </button>
+          <button onClick={() => download("workspace-records.json", w.data)}>
+            Export local records
+          </button>
+          <button
+            onClick={() =>
+              void call("next_get", { kind: "migration", id: "archive" })
+                .then((r) => download("preview-recovery-archive.json", r.value))
+                .catch(w.error)
+            }
+          >
+            Export migration archive
+          </button>
+        </div>
+        {storageStatus && <p role="status">{storageStatus}</p>}
         <label>
           Import a legacy network
           <input

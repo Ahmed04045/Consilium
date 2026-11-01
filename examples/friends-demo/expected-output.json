@@ -1,0 +1,12 @@
+{
+  "title": "Spaced repetition study guide",
+  "key_points": [
+    "Spread reviews across separate sessions.",
+    "Try to recall an answer before checking it.",
+    "Use mistakes to decide what to review next."
+  ],
+  "quiz": [
+    {"question": "What is active recall?", "answer": "Trying to retrieve an answer before looking at it."},
+    {"question": "What should a useful study session combine?", "answer": "Recall, checking mistakes, and scheduling another review."}
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "title": "How spaced repetition helps learning",
+  "facts": [
+    "Spaced repetition means reviewing material across separate sessions instead of doing all reviews at once.",
+    "Active recall means trying to retrieve an answer before looking at it.",
+    "A short review after a delay can reveal what needs more practice.",
+    "A useful study session combines recall, checking mistakes, and scheduling another review."
+  ],
+  "constraint": "Use only these facts. Do not invent scientific statistics or citations."
+}

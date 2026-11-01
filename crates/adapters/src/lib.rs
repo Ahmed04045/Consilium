@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 pub mod account;
+pub mod context;
 mod gemini;
 pub mod keys;
 pub fn cloud(provider: &str) -> bool {
@@ -95,7 +96,11 @@ impl Provider {
         if self.settings.chat_model.is_empty() {
             bail!("Choose a chat model in Settings");
         }
-        if system.len() + prompt.len() + 2560 > self.settings.context_tokens {
+        if context::request_tokens(system, prompt, None)
+            + 2048
+            + context::safety_tokens(self.settings.context_tokens)
+            > self.settings.context_tokens
+        {
             bail!("Request exceeds the configured conservative context budget");
         }
         self.fingerprint(&self.settings.chat_model).await?;
@@ -355,20 +360,17 @@ impl Provider {
         if self.settings.chat_model.trim().is_empty() {
             bail!("Choose a chat model in Settings");
         }
-        let input_bytes = system.len() + prompt.len() + schema.map_or(0, |s| s.to_string().len());
-        let output_limit = if schema.is_some_and(|s| s["properties"]["tasks"]["maxItems"] == 64) {
-            (self.settings.context_tokens / 2).min(12288)
-        } else if cloud(&self.settings.provider) {
-            4096
-        } else {
-            2048
-        };
-        let output_limit = output_limit.min(
-            self.settings
-                .context_tokens
-                .saturating_sub(input_bytes + 512),
+        let input_tokens = context::request_tokens(system, prompt, schema);
+        let output_limit = context::output_tokens(
+            self.settings.context_tokens,
+            &self.settings.provider,
+            schema,
         );
-        if output_limit < 1024 {
+        let output_limit =
+            output_limit.min(self.settings.context_tokens.saturating_sub(
+                input_tokens + context::safety_tokens(self.settings.context_tokens),
+            ));
+        if output_limit < 512 {
             bail!("This request exceeds the conservative context budget. Shorten active context or increase the configured model window.");
         }
         self.fingerprint(&self.settings.chat_model).await?;

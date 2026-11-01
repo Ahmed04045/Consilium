@@ -1,9 +1,12 @@
 //! Versioned workspace services shared by the desktop and command line.
 mod addons;
+mod authoring;
 mod automation;
 mod conversation;
 mod migration;
+mod phone;
 mod projects;
+mod readiness;
 #[cfg(test)]
 mod tests;
 mod wordcraft;
@@ -32,6 +35,7 @@ const KINDS: &[&str] = &[
     "artifact",
     "automation",
     "addon",
+    "test",
 ];
 impl Engine {
     fn mutation_epoch(&self) -> Result<(String, i64, Value)> {
@@ -44,16 +48,27 @@ impl Engine {
         if kind == "run" {
             consilium_workflow::runtime::recover_interrupted(&self.store)?;
         }
-        self.store.list(&format!("next:{kind}:"))
+        Ok(self
+            .store
+            .list::<Value>(&format!("next:{kind}:"))?
+            .into_iter()
+            .filter(|r| r.value["deleted"] != true)
+            .collect())
     }
     pub fn next_get<T: serde::de::DeserializeOwned>(
         &self,
         kind: &str,
         id: &str,
     ) -> Result<Record<T>> {
-        self.store
-            .read(&key(kind, id))?
-            .context("This item no longer exists")
+        let record = self
+            .store
+            .read::<Value>(&key(kind, id))?
+            .context("This item no longer exists")?;
+        ensure!(
+            record.value["deleted"] != true,
+            "This item has been deleted"
+        );
+        Ok(serde_json::from_value(serde_json::to_value(record)?)?)
     }
     pub fn next_validate(&self, kind: &str, id: &str, value: &Value) -> Result<()> {
         ensure!(
@@ -206,6 +221,15 @@ impl Engine {
         Ok(record)
     }
     pub async fn next_action(&self, action: &str, p: Value) -> Result<Value> {
+        if action.starts_with("next_phone_") {
+            return self.phone_action(action, p).await;
+        }
+        if action.starts_with("next_attachment_") {
+            return self.attachment_action(action, p);
+        }
+        if action.starts_with("next_authoring_") {
+            return self.authoring_action(action, p).await;
+        }
         if action.starts_with("next_addon_") {
             return self.addon_action(action, p);
         }
@@ -219,6 +243,73 @@ impl Engine {
             return self.workflow_action(action, p).await;
         }
         match action {
+            "next_delete" => {
+                let kind = field(&p, "kind")?;
+                ensure!(
+                    ["calendar", "network", "document", "thread", "task"].contains(&kind),
+                    "This item cannot be deleted here"
+                );
+                let id = field(&p, "id")?;
+                let _guard = self
+                    .gate
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("Store busy"))?;
+                let current = self.next_get::<Value>(kind, id)?;
+                ensure!(
+                    p["revision"].as_i64() == Some(current.revision),
+                    "Item changed; refresh before deleting"
+                );
+                let mut records = vec![(kind.to_string(), current)];
+                if kind == "calendar" {
+                    for child in ["task", "label"] {
+                        for record in self.next_list(child)? {
+                            if record.value["calendar_id"] == id {
+                                records.push((child.into(), record));
+                            }
+                        }
+                    }
+                }
+                let mut writes = vec![self.mutation_epoch()?];
+                let removed: Vec<String> = records
+                    .iter()
+                    .map(|(kind, r)| format!("{kind}:{}", r.value["id"].as_str().unwrap_or("")))
+                    .collect();
+                for (kind, mut record) in records {
+                    record.value["deleted"] = json!(true);
+                    writes.push((
+                        key(&kind, field(&record.value, "id")?),
+                        record.revision,
+                        record.value,
+                    ));
+                }
+                for mut record in self.next_list("automation")? {
+                    if record.value["network_id"] == id {
+                        record.value["enabled"] = json!(false);
+                        writes.push((
+                            key("automation", field(&record.value, "id")?),
+                            record.revision,
+                            record.value,
+                        ));
+                    }
+                }
+                self.store.write_many(&writes)?;
+                Ok(json!({"removed":removed}))
+            }
+            "next_preview_binding" => {
+                let binding = self
+                    .next_get::<LocalBinding>("binding", field(&p, "id")?)?
+                    .value;
+                ensure!(binding.kind == "file", "Choose a file");
+                let metadata = std::fs::metadata(&binding.path)
+                    .context("File does not exist yet; run the workflow to create its output")?;
+                ensure!(
+                    metadata.len() <= 1_000_000,
+                    "Preview supports text files up to 1 MB"
+                );
+                let text = std::fs::read_to_string(&binding.path)
+                    .context("This file is not UTF-8 text")?;
+                Ok(json!({"text":text,"path":binding.path}))
+            }
             "next_snapshot" => {
                 let mut out = serde_json::Map::new();
                 for kind in KINDS {
@@ -279,7 +370,14 @@ impl Engine {
             "next_import_preview" => self.import_preview(field(&p, "path")?),
             "next_send" => self.next_send(p).await,
             "next_context" => {
-                self.next_context(field(&p, "thread_id")?, p["request"].as_str().unwrap_or(""))
+                let mut context = self
+                    .next_context(field(&p, "thread_id")?, p["request"].as_str().unwrap_or(""))?;
+                context["context"]["attachments"] =
+                    json!(self.attachment_context(&p["attachments"])?);
+                context["estimated_tokens"] = json!(consilium_adapters::context::estimate_tokens(
+                    &context["context"].to_string()
+                ));
+                Ok(context)
             }
             "next_accept_changes" => self.accept_changes(field(&p, "id")?),
             "next_test_profile" => {

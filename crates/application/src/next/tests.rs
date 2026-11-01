@@ -367,3 +367,52 @@ async fn entire_series_edit_does_not_reset_start_to_clicked_occurrence() {
         "2026-10-22"
     );
 }
+#[tokio::test]
+async fn delete_is_revision_checked_and_scoped() {
+    let (_d, e) = engine();
+    save(&e, "calendar", calendar("a"), 0).await.unwrap();
+    save(&e, "calendar", calendar("b"), 0).await.unwrap();
+    save(&e, "task", json!(task("ta", "a")), 0).await.unwrap();
+    save(&e, "task", json!(task("tb", "b")), 0).await.unwrap();
+    assert!(e
+        .next_action(
+            "next_delete",
+            json!({"kind":"calendar","id":"a","revision":9})
+        )
+        .await
+        .is_err());
+    assert_eq!(e.next_list("calendar").unwrap().len(), 2);
+    e.next_action(
+        "next_delete",
+        json!({"kind":"calendar","id":"a","revision":1}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(e.next_list("calendar").unwrap().len(), 1);
+    assert_eq!(e.next_list("task").unwrap().len(), 1);
+    assert!(e.next_get::<Value>("task", "ta").is_err());
+    assert!(e.next_get::<Value>("task", "tb").is_ok());
+}
+#[tokio::test]
+async fn explicit_file_preview_reads_only_bound_text() {
+    let (d, e) = engine();
+    let path = d.path().join("reading.md");
+    std::fs::write(&path, "Synthetic reading").unwrap();
+    save(
+        &e,
+        "binding",
+        json!({"id":"reading","name":"Reading","kind":"file","path":path,"writable":false}),
+        0,
+    )
+    .await
+    .unwrap();
+    let value = e
+        .next_action("next_preview_binding", json!({"id":"reading"}))
+        .await
+        .unwrap();
+    assert_eq!(value["text"], "Synthetic reading");
+    assert!(e
+        .next_action("next_preview_binding", json!({"id":"missing"}))
+        .await
+        .is_err());
+}

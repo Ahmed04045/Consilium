@@ -7,7 +7,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 const LIMIT: u64 = 64 * 1024 * 1024;
-const MANIFEST: &str = "project.consilium";
+const MANIFEST: &str = "project.consi";
 fn safe_relative(s: &str) -> Result<PathBuf> {
     let p = Path::new(s);
     ensure!(

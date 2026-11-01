@@ -2,7 +2,7 @@ import { useState } from "react";
 export const appearanceDefaults = {
   density: "comfortable",
   fontSize: 14,
-  defaultView: "Month",
+  defaultView: "Day",
   weekStart: "sunday",
   showCompleted: true,
   rowHeight: 90,
@@ -11,6 +11,8 @@ export const appearanceDefaults = {
   hourHeight: 60,
   palette: "graphite",
   accent: "green",
+  accentColor: "",
+  backgroundColor: "",
 };
 export function readAppearance() {
   try {
@@ -32,10 +34,26 @@ export function readAppearance() {
         ? Math.min(max, Math.max(min, p[key]))
         : appearanceDefaults[key];
     }
+    if (!["comfortable", "compact"].includes(p.density))
+      p.density = "comfortable";
+    if (!["Day", "Week", "Month"].includes(p.defaultView))
+      p.defaultView = "Day";
+    if (!["sunday", "monday"].includes(p.weekStart)) p.weekStart = "sunday";
+    if (typeof p.showCompleted !== "boolean") p.showCompleted = true;
     if (!["graphite", "carbon", "stone"].includes(p.palette))
       p.palette = "graphite";
     if (!["green", "blue", "purple", "amber"].includes(p.accent))
       p.accent = "green";
+    if (
+      typeof p.accentColor !== "string" ||
+      !/^#[\da-f]{6}$/i.test(p.accentColor)
+    )
+      p.accentColor = "";
+    if (
+      typeof p.backgroundColor !== "string" ||
+      !/^#[\da-f]{6}$/i.test(p.backgroundColor)
+    )
+      p.backgroundColor = "";
     return p;
   } catch {
     return appearanceDefaults;
@@ -56,7 +74,9 @@ export function Customization() {
           App palette
           <select
             value={p.palette}
-            onChange={(e) => update({ ...p, palette: e.target.value })}
+            onChange={(e) =>
+              update({ ...p, palette: e.target.value, backgroundColor: "" })
+            }
           >
             <option value="graphite">Graphite</option>
             <option value="carbon">Carbon</option>
@@ -64,16 +84,46 @@ export function Customization() {
           </select>
         </label>
         <label>
+          Background color
+          <input
+            type="color"
+            aria-label="Background color"
+            value={p.backgroundColor || "#202020"}
+            onChange={(e) => update({ ...p, backgroundColor: e.target.value })}
+          />
+        </label>
+        <label>
           Action accent
           <select
             value={p.accent}
-            onChange={(e) => update({ ...p, accent: e.target.value })}
+            onChange={(e) =>
+              update({ ...p, accent: e.target.value, accentColor: "" })
+            }
           >
             <option value="green">Green</option>
             <option value="blue">Blue</option>
             <option value="purple">Purple</option>
             <option value="amber">Amber</option>
           </select>
+        </label>
+        <label>
+          Custom accent color
+          <input
+            type="color"
+            aria-label="Custom accent color"
+            value={
+              p.accentColor ||
+              (
+                {
+                  green: "#a3c9ae",
+                  blue: "#99bce8",
+                  purple: "#bca5df",
+                  amber: "#ddc188",
+                } as Record<string, string>
+              )[p.accent]
+            }
+            onChange={(e) => update({ ...p, accentColor: e.target.value })}
+          />
         </label>
         {(
           [
@@ -144,7 +194,7 @@ export function Customization() {
           checked={p.showCompleted}
           onChange={(e) => update({ ...p, showCompleted: e.target.checked })}
         />
-        Show completed tasks
+        Show completed tasks in new calendar views
       </label>
       <button onClick={() => update(appearanceDefaults)}>
         Reset appearance

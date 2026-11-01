@@ -21,6 +21,23 @@ export const colors: Record<string, string> = {
   red: "#d99292",
   gray: "#ababab",
 };
+export const colorInk = (value: string) => {
+  const color = colors[value] || value;
+  const match = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(color);
+  if (!match) return "#151515";
+  const hex =
+    match[1].length === 3 ? [...match[1]].map((c) => c + c).join("") : match[1];
+  const [r, g, b] = [0, 2, 4].map(
+    (i) => parseInt(hex.slice(i, i + 2), 16) / 255,
+  );
+  const luminance = [r, g, b].map((c) =>
+    c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4,
+  );
+  return 0.2126 * luminance[0] + 0.7152 * luminance[1] + 0.0722 * luminance[2] >
+    0.42
+    ? "#111111"
+    : "#ffffff";
+};
 const kinds = [
   "calendar",
   "label",
@@ -34,6 +51,7 @@ const kinds = [
   "changeset",
   "layout",
   "run",
+  "artifact",
   "automation",
   "addon",
 ];
@@ -48,7 +66,33 @@ export async function call<T = any>(action: string, p: Data = {}): Promise<T> {
       localStorage.getItem("consilium-next-browser") || JSON.stringify(empty()),
     ),
   };
-  if (action === "next_snapshot") return data as T;
+  if (action === "next_snapshot")
+    return Object.fromEntries(
+      Object.entries(data).map(([k, v]) => [
+        k,
+        v.filter((r) => !r.value.deleted),
+      ]),
+    ) as T;
+  if (action === "next_delete") {
+    const record = data[p.kind].find((r) => r.value.id === p.id);
+    if (!record || record.revision !== p.revision)
+      throw Error("Item changed; refresh before deleting");
+    const removed: string[] = [];
+    for (const [kind, records] of Object.entries(data))
+      for (const r of records)
+        if (
+          (kind === p.kind && r.value.id === p.id) ||
+          (p.kind === "calendar" &&
+            ["task", "label"].includes(kind) &&
+            r.value.calendar_id === p.id)
+        ) {
+          r.value.deleted = true;
+          r.revision++;
+          removed.push(kind + ":" + r.value.id);
+        }
+    localStorage.setItem("consilium-next-browser", JSON.stringify(data));
+    return { removed } as T;
+  }
   if (action === "next_get")
     return data[p.kind].find((r) => r.value.id === p.id) as T;
   if (action === "next_save") {
@@ -93,6 +137,7 @@ export type Workspace = {
   refresh: () => Promise<void>;
   save: (kind: string, value: Data, revision?: number) => Promise<Row>;
   open: (kind: string, id?: string, title?: string) => void;
+  bindThread: (tabId: string, threadId: string, title: string) => void;
   create: (calendar?: string, date?: string, parent?: string) => void;
   error: (e: unknown) => void;
   busy: boolean;

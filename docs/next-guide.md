@@ -1,5 +1,7 @@
 # Consilium Next guide
 
+Stable release: **3.0.0**. See release-status.md for current verification; dated development notes below are historical.
+
 ## Workspace
 
 Home is the starting tab. Create a calendar or network, pin existing objects, and use Customize to reorder, hide or resize reference widgets. Widgets do not duplicate records, start workflows or load document editors. Search in the title bar, or open the independent Search tab. Ctrl+K focuses search; Ctrl+N opens Create; Ctrl+P opens Assistant. Tabs retain their own selected items and drafts. Saved document editors unload when inactive.
@@ -101,3 +103,27 @@ In a file/folder node, **Browse file…** or **Browse folder…** opens the nati
 ## Automation and real-world examples (alpha.4)
 
 See [calendar automation and adapters](automation-and-adapters.md) for scheduled runs, bounded calendar changes, workflow revision proposals, optional program add-ons, and the ML/Godot examples.
+
+## Attachments and tested network authoring (alpha.5)
+
+See [network authoring and sample tests](network-authoring.md) for file sharing controls, single-node repair, guided resource setup, and testing proposed graph revisions before accepting them.
+
+## Home and navigation (alpha.7)
+
+Home surfaces recent work across calendars, networks, documents and conversations. Use Customize to rearrange reference widgets, or pin items for quicker access. Navigation groups can be collapsed with the mouse or keyboard and retain their state between launches. Opening another item preserves unrelated tabs and drafts. Settings remains at the foot of the sidebar.
+
+## Settings and desktop menus (alpha.9)
+
+Settings opens a separate screen with category navigation. Back to app restores the active workspace, including open tabs and unsaved settings drafts. Appearance offers a custom background and accent; text and surrounding surfaces adapt to the background. Selecting a palette clears the custom background.
+
+Edit acts on the last focused text field; Wordcraft uses its own editing toolbar and shortcuts. View provides sidebar visibility, tab navigation, zoom and full screen. Help opens bundled guidance, shortcuts, release notes and About. Ctrl+, opens Settings, Ctrl+PageUp/PageDown changes tabs, Ctrl+W closes the active tab, Ctrl+0 restores zoom, and F11 toggles full screen.
+
+Validation: nine browser checks passed, plus a final focused check of light/dark contrast and the 940px window layout. Production TypeScript/Vite compilation passed. This remains an unsigned preview; clean-machine installer verification is still outstanding.
+
+## Recording demo (alpha.10)
+
+The synthetic kit in examples/friends-demo includes a four-minute outline, calendar/network prompts, reading.json and expected-output.json. The expected output is only a comparison example; bind a new study-summary.json destination for the generated result.
+
+Calendar save/export lives in its three-dot menu. Workspace sidebar items and conversations offer right-click or three-dot Open/Delete actions. Calendar deletion also removes its tasks and owned labels from active views; disk files are not removed by item deletion. Network Files shows explicit input/output bindings, and Preview reads a chosen UTF-8 file locally (maximum 1 MB) without sending it to a model.
+
+New project files use .consi; existing .consilium files remain accepted. Eleven browser cases passed (the moved save action was rechecked after updating its selector), along with nine workspace service tests and six portable-project tests. No live provider request was made for the demo kit; rehearse it with your selected model before recording.

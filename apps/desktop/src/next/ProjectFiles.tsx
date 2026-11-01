@@ -25,6 +25,13 @@ export function ProjectFiles({
   useEffect(() => {
     void refresh().catch(() => {});
   }, [kind, id]);
+  useEffect(() => {
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) setDialog(null);
+    };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [busy]);
   async function write(existing = false) {
     setBusy(true);
     try {
@@ -88,12 +95,6 @@ export function ProjectFiles({
       >
         Export…
       </button>
-      <span
-        className="nx-project-location"
-        title={location || "Working draft is autosaved in the local vault"}
-      >
-        {location || "Local draft · choose Save to keep a project file"}
-      </span>
       {dialog && (
         <div className="nx-overlay" onClick={() => !busy && setDialog(null)}>
           <section
@@ -119,7 +120,7 @@ export function ProjectFiles({
                 value={format}
                 onChange={(e) => setFormat(e.target.value)}
               >
-                <option value="file">Single Consilium file (.consilium)</option>
+                <option value="file">Single Consilium file (.consi)</option>
                 <option value="folder">
                   {dialog === "export"
                     ? "Folder with input files"

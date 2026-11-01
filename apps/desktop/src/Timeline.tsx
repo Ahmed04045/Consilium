@@ -71,7 +71,7 @@ export function Timeline({
                 .map((t) => (
                   <TaskButton
                     key={t.id}
-                    className={`calendar-task color-${color(t)}`}
+                    className={`calendar-task color-${color(t)} ${t.completed ? "completed" : ""}`}
                     task={t}
                     disabled={busy}
                     onOpen={() => onEdit({ ...t })}

@@ -22,12 +22,15 @@ import {
   Trash2,
   Folder,
   MousePointer2,
+  MoreHorizontal,
 } from "lucide-react";
 import { useWorkspace, row, call, Data, uid, download } from "./state";
 import { catalog, groups, nodeSummary } from "./NodeCatalog";
 import { NodeProperties } from "./NodeProperties";
+import { NetworkFiles } from "./NetworkFiles";
 import { ProjectFiles } from "./ProjectFiles";
 import { AutomationSetup, AutomationStatus } from "./Automation";
+import { NetworkChecks } from "./NetworkChecks";
 function GraphNode({ data, selected }: NodeProps) {
   const d = data as Data;
   const Icon = catalog[d.kind].icon;
@@ -466,20 +469,27 @@ export function NetworkView({ id }: { id: string }) {
           <Redo size={16} />
         </button>
         <span className="nx-spacer" />
-        <ProjectFiles kind="network" id={id} beforeSave={save} />
-        <button
-          onClick={() =>
-            void call("next_network_validate", { network: graph, revision })
-              .then(() =>
-                setValidation(
-                  "Graph is valid. Runtime bindings are checked during run review.",
-                ),
-              )
-              .catch((e) => setValidation(String(e)))
-          }
-        >
-          Validate
-        </button>
+        <details className="nx-network-menu">
+          <summary aria-label="Network actions" title="Save, export and more">
+            <MoreHorizontal size={19} />
+          </summary>
+          <div>
+            <ProjectFiles kind="network" id={id} beforeSave={save} />
+            <button
+              onClick={() =>
+                void call("next_network_validate", { network: graph, revision })
+                  .then(() =>
+                    setValidation(
+                      "Structure is valid. Resource readiness and behavior are separate checks below.",
+                    ),
+                  )
+                  .catch((e) => setValidation(String(e)))
+              }
+            >
+              Validate
+            </button>
+          </div>
+        </details>
         <button
           className="nx-primary"
           disabled={running}
@@ -490,6 +500,7 @@ export function NetworkView({ id }: { id: string }) {
         </button>
       </header>
       <AutomationStatus id={id} />
+      <NetworkChecks network={graph} revision={revision} onChange={change} />
       {record.revision !== revision && (
         <div className="nx-validation">
           A newer revision is saved.{" "}
@@ -748,6 +759,7 @@ export function NetworkView({ id }: { id: string }) {
           </ReactFlow>
         </div>
         <aside className="nx-inspector">
+          <NetworkFiles graph={graph} />
           <details>
             <summary>
               Group selected nodes ({multi.length || (selected ? 1 : 0)})
@@ -1124,6 +1136,15 @@ export function NetworkView({ id }: { id: string }) {
             {review.proposal ? (
               <>
                 <pre>{JSON.stringify(review.proposal.changes, null, 2)}</pre>
+                {review.proposal.changes
+                  .filter((c: Data) => c.kind === "network")
+                  .map((c: Data) => (
+                    <NetworkChecks
+                      key={c.id}
+                      network={c.value}
+                      revision={c.expected_revision + 1}
+                    />
+                  ))}
                 <button
                   className="nx-primary"
                   onClick={() =>

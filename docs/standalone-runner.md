@@ -1,4 +1,4 @@
-# Consilium standalone runner preview
+# Consilium standalone runner — 3.0.0
 
 ## Install the `consi` command
 
@@ -7,6 +7,7 @@ Extract the entire runner ZIP, open PowerShell in its `consilium-runner` folder,
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-Consi.ps1
 ```
+
 
 This copies `consi.exe` and the compatible `consilium.exe` command to `%LOCALAPPDATA%\ConsiliumRunner\bin`, adds that folder to your **user PATH** without replacing its existing entries, and needs no administrator access. Reopen existing terminal applications afterward. The execution-policy override applies only to that installer invocation; it does not change your saved policy. You can inspect the script before running it, use `-WhatIf` to preview, or `-NoPath` to copy the binaries without changing PATH. Existing running copies must be closed before updating.
 
@@ -86,4 +87,4 @@ Other commands: `validate`, `compile`, `runs`, `cancel`, `accept CHANGESET_ID --
 
 Programs execute with your Windows user permissions, with Job Object process control; this is not a sandbox. Import/pack/extract do not execute. Running requires review of the current graph/resources. A changed script or binding invalidates earlier approval. Noninteractive runs stop at human approval gates until explicitly resumed. No remote endpoint, scheduled Windows service, BIOS changes or physical wake operation is installed by this bundle.
 
-The desktop and CLI use the same application/workflow services. This standalone tooling update does not alter the published alpha.3 release or rebuild the existing desktop installer.
+The desktop and CLI use the same application/workflow services. Version 3.0.0 is distributed with the stable desktop release.

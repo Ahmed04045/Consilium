@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#202020"><title>Consilium</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://fnmcnuytkijnjpvznvow.supabase.co; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+<link rel="stylesheet" href="style.css"><script type="module" src="app.js"></script></head>
+<body><main><header><h1>Consilium</h1><button id="signout" hidden>Sign out</button></header>
+<p id="status" role="status"></p><p id="error" role="alert"></p>
+<section id="account"><h2>Connect with phone</h2><form id="login">
+<label>Email<input id="email" type="email" autocomplete="username" maxlength="254" required></label>
+<label>Password<input id="password" type="password" autocomplete="current-password" maxlength="1024" required></label>
+<div class="actions"><button type="submit">Sign in</button><button type="button" id="signup">Create account</button></div>
+<small>Use the same account as the desktop app. New passwords need at least 12 characters.</small></form></section>
+<section id="workspace" hidden>
+<div class="actions"><button id="review">Review sync</button><button id="export">Download backup</button></div>
+<div id="sync-review" hidden><p id="sync-details"></p><p>Download replaces the calendar copy on this phone. Upload sends your calendar edits to your account.</p><div class="actions"><button id="pull">Download calendars</button><button id="push">Upload calendars</button></div></div>
+<label>Calendar<select id="calendar"></select></label><label>Day<input id="date" type="date"></label>
+<div id="tasks"></div>
+<details><summary>Add task</summary><form id="new-task"><label>Title<input id="title" maxlength="200" required></label><button type="submit">Add task</button></form></details>
+</section></main></body></html>

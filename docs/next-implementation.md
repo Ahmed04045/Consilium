@@ -1,6 +1,8 @@
 # Consilium Next implementation and verification
 
-Updated 2026-10-25. Version **3.0.0-alpha.4**, unsigned development preview.
+Current release: **3.0.0 stable**, approved by the owner on 2 November 2026. Entries below preserve the development history and the limitations recorded at the time. See `release-status.md` for current status.
+
+Updated 2026-10-27. Version **3.0.0-alpha.8**, unsigned development preview.
 
 Baseline: commit `258765e`, branch `preview/2.0-alpha.4`. Development branch: `next-workspaces`. The preview executable, installer, vault and credential namespace are preserved.
 
@@ -22,6 +24,35 @@ Baseline: commit `258765e`, branch `preview/2.0-alpha.4`. Development branch: `n
 - [x] Learning and code/data acceptance workflows through desktop and CLI with synthetic model responses.
 
 ## Verification evidence
+
+### Interface refresh (alpha.8)
+
+- Production TypeScript/Vite build and Rust application compilation passed.
+- Packaged the unsigned Windows x64 NSIS preview. SHA-256 is recorded in `next-installer.sha256`.
+- Acceptance and browser test suites were not run for this interface pass.
+
+### Context budgets and Home/navigation (alpha.7)
+
+- 66 Rust tests passed across adapters and application; the explicit Windows credential integration test remains ignored in this run.
+- Eight browser tests passed, including recent-work ordering, active navigation, persisted keyboard collapse, pins and horizontal overflow checks. Production TypeScript/Vite build passed.
+- Packaged Windows acceptance passed with 21 synthetic model requests: a large prompt that exceeded the previous byte-based budget received one successful focused repair; a genuinely oversized request sent no provider traffic. Existing conversation, learning/code-data, ML and Godot desktop/CLI checks passed.
+- Built the unsigned alpha.7 NSIS installer and recorded its SHA-256 in `next-installer.sha256`. This does not replace clean-machine installation or real-provider quality verification.
+
+### Alpha.6 conversation continuity
+
+- New-chat creation now binds the saved thread to the existing tab identity rather than opening a second empty view. Prompt, waiting/cancel state and inline failure state remain with that view. Duplicate submission is blocked and failed prompts remain in the composer.
+- Seven browser regressions and the production TypeScript/Vite build passed. Packaged Windows native acceptance verifies a delayed first response without adding a tab, a duplicate-submit guard, malformed-response repair failure followed by retry in the same thread, a separate new draft, and reopening through Recent conversations without duplicating the existing tab. Existing learning/code-data/ML/Godot desktop and CLI workflows also passed against synthetic models.
+- This is a UI continuity fix. It does not add crash-resumable provider requests or certify real-provider model quality. The installer remains an unsigned preview.
+
+### Alpha.5 network authoring
+
+- 58 Rust tests verified across application, workflow/runtime and both CLI entry points (57 in the combined run plus the new approval/stale-graph test, followed by the three readiness regressions). They cover explicit attachment sharing, snapshot tampering, wrong resource types, weak-contract warnings, independent sample comparison, approval pause/resume and invalidated approval after a graph edit.
+- Seven Next browser tests and the production TypeScript/Vite build passed. The standalone `consi` executable passed pack/extract/import, twelve expected simulation results, approval pause/resume and Wordcraft persistence.
+- Final Windows native acceptance passed against the packaged executable with its frontend asset hash checked against the production build. An isolated vault and local model fixture verified attachment consent/receipts, wrong-node rejection with one repair, preserved unrelated nodes/edges, actual-versus-expected output, and the visible attachment-preview/sample-test flow. Existing learning, code/data, ML and Godot workflows passed through desktop and CLI. The UI test substitutes only the native file-picker response with a synthetic file; storage, model routing and execution use real Rust IPC.
+- Single-node authoring merges only the selected node under a revision check. Invalid model output gets one repair attempt; rejected repair preserves the saved network. Both assistant proposals and run-generated network revisions offer reviewed sample tests before acceptance.
+- The assistant prompt is versioned at `prompts/workspace-assistant.txt`. It requires evidence, exact resource IDs and actual implementation, but does not certify model quality. File-content sharing defaults off and is cleared when the selected profile/provider/model/endpoint changes.
+- External input contents are not fingerprinted in the general readiness digest. Retest after external file changes. Attachment snapshots are separately digest-checked. Tests execute real code and approved side effects; they are not sandboxed simulations.
+- [Authoring and test instructions](network-authoring.md). Real Gemini/OpenRouter quality and clean-machine installation remain unverified; retain preview status.
 
 ### Alpha.4 automation and adapters
 

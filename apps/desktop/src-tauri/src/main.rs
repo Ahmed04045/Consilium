@@ -22,7 +22,7 @@ async fn rpc(
         if p["operation"] == "open" {
             let picked = rfd::AsyncFileDialog::new()
                 .set_title("Open Consilium project (imports a local copy)")
-                .add_filter("Consilium project", &["consilium"])
+                .add_filter("Consilium project", &["consi", "consilium"])
                 .pick_file()
                 .await;
             let Some(file) = picked else {
@@ -42,8 +42,8 @@ async fn rpc(
         } else {
             rfd::AsyncFileDialog::new()
                 .set_title("Save Consilium project")
-                .set_file_name("project.consilium")
-                .add_filter("Consilium project", &["consilium"])
+                .set_file_name("project.consi")
+                .add_filter("Consilium project", &["consi", "consilium"])
                 .save_file()
                 .await
         };
@@ -62,9 +62,9 @@ async fn rpc(
             }
             path = path.join(name);
         } else if p["save_folder"] == true {
-            path = path.join("project.consilium");
+            path = path.join("project.consi");
             if path.exists() {
-                return Err("This folder already contains project.consilium. Choose a different folder or save as a file.".into());
+                return Err("This folder already contains project.consi. Choose a different folder or save as a file.".into());
             }
         }
         p["path"] = serde_json::json!(path);

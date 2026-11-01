@@ -281,9 +281,10 @@ test("calendar customization persists and scales task positions with hour height
     .getByRole("combobox", { name: "Action accent" })
     .selectOption("purple");
   await page.getByRole("tab", { name: "Calendar", exact: true }).click();
+  await page.getByLabel("Calendar view", { exact: true }).selectOption("Month");
   await expect(page.locator(".calendar-grid")).toHaveCSS("column-gap", "16px");
   await expect(page.locator(".calendar-grid")).toHaveCSS("row-gap", "16px");
-  await page.getByLabel("Calendar view").selectOption("Day");
+  await page.getByLabel("Calendar view", { exact: true }).selectOption("Day");
   await expect(page.locator(".timeline-task")).toHaveCSS("top", "1230px");
   await expect(page.locator(".timeline-task")).toHaveCSS("height", "60px");
   await expect(page.locator(".timeline-body")).toHaveCSS("height", "2880px");
@@ -449,6 +450,7 @@ test("popup transitions respect reduced motion and no bottom overflow", async ({
       .evaluate((e) => getComputedStyle(e).animationName),
   ).toBe("none");
   await page.keyboard.press("Escape");
+  await page.getByLabel("Calendar view", { exact: true }).selectOption("Month");
   await page.setViewportSize({ width: 940, height: 640 });
   expect(
     await page
@@ -531,7 +533,7 @@ test("labels, quick search and minute-positioned tasks", async ({ page }) => {
     page.getByRole("tab", { name: "Read history", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "Calendar", exact: true }).click();
-  await page.getByLabel("Calendar view").selectOption("Day");
+  await page.getByLabel("Calendar view", { exact: true }).selectOption("Day");
   await expect(page.locator(".timeline-task")).toHaveCSS("top", "615px");
   await page.screenshot({ path: "../../docs/screenshots/v1-timeline.png" });
 });

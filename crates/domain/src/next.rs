@@ -174,6 +174,10 @@ pub struct Message {
     pub at: String,
     #[serde(default)]
     pub proposal_id: Option<String>,
+    #[serde(default)]
+    pub attachments: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub title_suggestion: Option<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]

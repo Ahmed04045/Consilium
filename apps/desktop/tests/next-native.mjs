@@ -9,13 +9,30 @@ import { learning, codeData } from "../../../tests/fixtures/next-networks.mjs";
 let sequence = 0,
   mode = "normal",
   requests = [];
+const dateOffset = (days) => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Qatar",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+    .formatToParts(new Date())
+    .reduce((values, part) => {
+      if (part.type !== "literal") values[part.type] = Number(part.value);
+      return values;
+    }, {});
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+const taskDate = dateOffset(1);
 const task = (id, overrides = {}) => ({
   id,
   calendar_id: "fixture-calendar",
   title: "Vocabulary practice",
   kind: "flexible",
-  start_date: "2026-10-22",
-  end_date: "2026-10-22",
+  start_date: taskDate,
+  end_date: taskDate,
   start_time: "",
   end_time: "",
   timezone: "Asia/Qatar",
@@ -49,11 +66,33 @@ const server = createServer(async (req, res) => {
     return res.end("{}");
   }
   requests.push(body);
+  if (mode === "delayed-chat")
+    await new Promise((resolve) => setTimeout(resolve, 1500));
   let content;
   const system = body.messages?.[0]?.content || "",
     prompt = body.messages?.at(-1)?.content || "";
-  if (mode === "invalid") content = "{";
-  else if (mode === "network-proposal") {
+  if (mode === "repair-once") {
+    mode = "normal";
+    content = "{";
+  } else if (mode === "invalid") content = "{";
+  else if (mode === "node-proposal" || mode === "wrong-node") {
+    const context = JSON.parse(prompt).context;
+    const node = context.destination.value.nodes.find(
+      (n) => n.id === context.authoring.selected_node_id,
+    );
+    content = JSON.stringify({
+      reply: "Review the selected node edit.",
+      title_suggestion: "Selected Node Review",
+      changes: [
+        {
+          kind: "network_node",
+          id: mode === "wrong-node" ? "output" : node.id,
+          expected_revision: context.destination.revision,
+          value_json: JSON.stringify({ ...node, title: "Reviewed input" }),
+        },
+      ],
+    });
+  } else if (mode === "network-proposal") {
     const destination = JSON.parse(prompt).context.destination;
     const graph = {
       ...destination.value,
@@ -85,6 +124,7 @@ const server = createServer(async (req, res) => {
     };
     content = JSON.stringify({
       reply: "Review this proposed network.",
+      title_suggestion: "Network Proposal",
       changes: [
         {
           kind: "network",
@@ -98,7 +138,7 @@ const server = createServer(async (req, res) => {
     const prefix = `study-${++sequence}`,
       goal = task(`${prefix}-goal`, {
         kind: "goal",
-        end_date: "2026-10-28",
+      end_date: dateOffset(7),
         target: 200,
         unit: "words",
         steps: [
@@ -123,8 +163,8 @@ const server = createServer(async (req, res) => {
       }),
       child = task(`${prefix}-child`, {
         parent_id: goal.id,
-        start_date: "2026-10-23",
-        end_date: "2026-10-23",
+        start_date: dateOffset(2),
+        end_date: dateOffset(2),
       });
     content = JSON.stringify({
       approved: false,
@@ -171,6 +211,7 @@ const server = createServer(async (req, res) => {
   } else
     content = JSON.stringify({
       reply: "The selected calendar is ready. No changes have been applied.",
+      title_suggestion: "Calendar Planning",
       changes: [],
     });
   res.end(JSON.stringify({ message: { content }, done: true }));
@@ -221,6 +262,14 @@ try {
   assert(page);
   page.on("pageerror", (e) => console.error("UI error:", e.message));
   console.log("Native page", page.url());
+  const builtScript = readFileSync(resolve("dist/index.html"), "utf8").match(
+    /src="(\/assets\/index-[^"]+\.js)"/,
+  )[1];
+  assert.equal(
+    await page.locator('script[type="module"]').getAttribute("src"),
+    builtScript,
+    "Executable must embed the latest frontend build",
+  );
   try {
     await page.getByRole("heading", { name: "Home", exact: true }).waitFor();
   } catch (e) {
@@ -507,7 +556,7 @@ try {
   assert(
     requests
       .at(-1)
-      .messages[0].content.includes("You CAN create and revise graphs"),
+      .messages[0].content.includes("return an actual graph ChangeSet"),
   );
   const proposed = (
     await rpc("next_get", { kind: "thread", id: "network-thread" })
@@ -523,6 +572,138 @@ try {
       .length,
     2,
   );
+  // The real IPC/provider path must honor file sharing and single-node boundaries.
+  const attachment = await rpc("next_attachment_add", {
+    path: join(root, "data.json"),
+  });
+  assert.equal(attachment.text, undefined);
+  const choice = { ...attachment, workflow_input: true, share_content: false };
+  async function author(extra = {}) {
+    const t = await rpc("next_get", { kind: "thread", id: "network-thread" });
+    return rpc("next_send", {
+      thread_id: "network-thread",
+      revision: t.revision,
+      request: "Inspect the supplied evidence.",
+      ...extra,
+    });
+  }
+  await author({ attachments: [choice] });
+  let packet = JSON.parse(requests.at(-1).messages.at(-1).content);
+  assert.equal(packet.context.attachments[0].text, undefined);
+  assert.equal(packet.context.attachments[0].content_status, "not_shared");
+  await author({ attachments: [{ ...choice, share_content: true }] });
+  packet = JSON.parse(requests.at(-1).messages.at(-1).content);
+  assert.deepEqual(JSON.parse(packet.context.attachments[0].text), [
+    { value: 2 },
+    { value: 3 },
+    { value: 5 },
+  ]);
+  const receipt = (
+    await rpc("next_get", { kind: "thread", id: "network-thread" })
+  ).value.messages.at(-2).attachments[0];
+  assert.equal(receipt.shared_with_model, true);
+  assert.equal(receipt.text, undefined);
+  const beforeNode = await rpc("next_get", {
+    kind: "network",
+    id: "ai-network",
+  });
+  mode = "node-proposal";
+  await author({ authoring_stage: "implement_node", node_id: "input" });
+  const nodeProposal = (
+    await rpc("next_get", { kind: "thread", id: "network-thread" })
+  ).value.messages.at(-1).proposal_id;
+  await rpc("next_accept_changes", { id: nodeProposal });
+  const afterNode = await rpc("next_get", {
+    kind: "network",
+    id: "ai-network",
+  });
+  assert.equal(afterNode.value.nodes[0].title, "Reviewed input");
+  assert.deepEqual(afterNode.value.nodes[1], beforeNode.value.nodes[1]);
+  assert.deepEqual(afterNode.value.edges, beforeNode.value.edges);
+  mode = "wrong-node";
+  const nodeCallCount = requests.length;
+  await assert.rejects(
+    () => author({ authoring_stage: "repair_node", node_id: "input" }),
+    /could not be repaired/,
+  );
+  assert.equal(
+    requests.length - nodeCallCount,
+    2,
+    "Exactly one repair request",
+  );
+  assert.deepEqual(
+    await rpc("next_get", { kind: "network", id: "ai-network" }),
+    afterNode,
+  );
+  mode = "normal";
+  const sampleReview = await rpc("next_authoring_review", {
+    network: afterNode.value,
+    revision: afterNode.revision,
+  });
+  const sampleResult = await rpc("next_authoring_test", {
+    network: afterNode.value,
+    revision: afterNode.revision,
+    approved: true,
+    approval_digest: sampleReview.approval_digest,
+    input: { answer: 42 },
+    expected: 42,
+    output_node_id: "output",
+    pointer: "/answer",
+  });
+  assert.equal(sampleResult.status, "passed");
+  const savedProfile = await rpc("next_get", {
+    kind: "profile",
+    id: "fixture-profile",
+  });
+  await rpc("next_save", {
+    kind: "profile",
+    revision: savedProfile.revision,
+    value: { ...savedProfile.value, context_tokens: 16384 },
+  });
+  mode = "repair-once";
+  const beforeRepair = requests.length;
+  await author({
+    request:
+      "Discuss this graph without changes. " +
+      "A useful observation about the workflow. ".repeat(160),
+  });
+  assert.equal(
+    requests.length - beforeRepair,
+    2,
+    "One focused repair follows malformed output",
+  );
+  const firstBudgetRequest = requests[beforeRepair];
+  assert(
+    firstBudgetRequest.messages
+      .map((m) => m.content.length)
+      .reduce((a, b) => a + b, 0) > 8192,
+    "This request would exceed the previous byte-based application budget",
+  );
+  const repairPacket = JSON.parse(requests.at(-1).messages.at(-1).content);
+  assert.equal(repairPacket.invalid_output, "{");
+  assert.equal(repairPacket.context.recent_messages, undefined);
+  assert.equal(
+    repairPacket.schema,
+    undefined,
+    "Response schema is passed once through the provider contract",
+  );
+  assert.equal(repairPacket.contracts, undefined);
+  await rpc("next_save", {
+    kind: "profile",
+    revision: savedProfile.revision + 1,
+    value: { ...savedProfile.value, context_tokens: 2048 },
+  });
+  const beforeOversized = requests.length;
+  await assert.rejects(
+    author({ request: "Explain this network." }),
+    /Nothing has been sent/,
+  );
+  assert.equal(requests.length, beforeOversized);
+  await rpc("next_save", {
+    kind: "profile",
+    revision: savedProfile.revision + 2,
+    value: savedProfile.value,
+  });
   const packagePath = join(root, "portable.json");
   await cliCall(["export", learning.id, packagePath, "--include-scripts"]);
   const exported = readFileSync(packagePath, "utf8");
@@ -582,12 +763,13 @@ try {
     .locator(".nx-sidebar")
     .getByRole("button", { name: "Learning acceptance", exact: true })
     .click();
+  await page.getByLabel("Calendar view").selectOption("Month");
   const events = page.locator(".nx-event-title");
   await events.first().waitFor();
   await page.screenshot({ path: "../../docs/screenshots/next-calendar.png" });
   await events.first().click();
   await page
-    .getByRole("button", { name: "Main document", exact: true })
+    .getByRole("button", { name: "Open full-page document", exact: true })
     .click();
   await page.locator('iframe[title="Main document editor"]:visible').waitFor();
   const editor = page.frameLocator(
@@ -642,6 +824,7 @@ try {
   );
   await page.getByLabel("Search this network").fill("");
   await page.screenshot({ path: "../../docs/screenshots/next-network.png" });
+  await page.getByLabel("Network actions").click();
   await page.getByRole("button", { name: "Export…", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "Export project" }),
@@ -822,6 +1005,16 @@ try {
     .getByRole("button", { name: "Settings", exact: true })
     .first()
     .click();
+  const settingsPanel = page.getByRole("complementary", {
+    name: "Settings navigation",
+  });
+  await expect(settingsPanel).toBeVisible();
+  await settingsPanel
+    .getByRole("textbox", { name: "Find a setting" })
+    .fill("Add-ons");
+  await settingsPanel
+    .getByRole("button", { name: "Add-ons", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Review ML: linear regression", exact: true })
     .click();
@@ -833,6 +1026,173 @@ try {
   await addonDialog
     .getByRole("button", { name: "Close dialog", exact: true })
     .click();
+  await page
+    .getByRole("button", { name: "Back to app", exact: true })
+    .click();
+  // Native picker is replaced only for this synthetic selection; all storage,
+  // sharing, model requests and test execution still use real Rust IPC.
+  await page.evaluate(
+    (path) => {
+      const original = window.fetch.bind(window);
+      window.fetch = (url, options) => {
+        if (
+          String(url).includes("ipc.localhost/rpc") &&
+          typeof options?.body === "string" &&
+          JSON.parse(options.body).action === "next_pick_path"
+        ) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ path }), {
+              headers: {
+                "Content-Type": "application/json",
+                "Tauri-Response": "ok",
+              },
+            }),
+          );
+        }
+        return original(url, options);
+      };
+    },
+    join(root, "data.json"),
+  );
+  await page
+    .locator(".nx-sidebar")
+    .getByRole("button", { name: "Assistant", exact: true })
+    .click();
+  const chat = page.locator(".nx-chat:visible");
+  await chat.getByRole("button", { name: "Destination" }).click();
+  await page
+    .getByRole("menuitem", { name: "AI draft check", exact: true })
+    .click();
+  await chat.getByRole("button", { name: "Model profile" }).click();
+  await page
+    .getByRole("menuitemradio", { name: /Synthetic local model/ })
+    .click();
+  await chat
+    .getByRole("button", { name: "Add files or choose a mode" })
+    .click();
+  await page.getByRole("menuitem", { name: "Add file", exact: true }).click();
+  await expect(chat.getByLabel("Use as workflow input")).toBeChecked();
+  await expect(chat.getByLabel(/Share contents with/)).not.toBeChecked();
+  await chat
+    .getByRole("button", { name: "Preview contents", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Attachment preview" }),
+  ).toContainText('"value":2');
+  await page
+    .getByRole("dialog", { name: "Attachment preview" })
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await chat
+    .getByRole("button", { name: "Add files or choose a mode" })
+    .click();
+  await page.getByRole("menuitem", { name: "Network options" }).click();
+  await chat.getByLabel("Authoring stage").selectOption("repair_node");
+  await chat.getByLabel("Selected authoring node").selectOption("input");
+  await page.screenshot({ path: "../../docs/screenshots/next-authoring.png" });
+  // First send must promote this tab in place, preserving its pending UI.
+  await chat.getByLabel("Authoring stage").selectOption("graph");
+  await chat.getByRole("button", { name: "Remove from message" }).click();
+  const tabCount = await page.getByRole("tab").count();
+  const beforeThreads = (await rpc("next_snapshot")).thread.length;
+  mode = "delayed-chat";
+  const beforeFirstSend = requests.length;
+  await chat
+    .getByLabel("Message", { exact: true })
+    .fill("Keep this conversation visible");
+  await chat.getByRole("button", { name: "Send", exact: true }).click();
+  await chat.locator("form").dispatchEvent("submit");
+  await expect(chat.getByLabel("Pending message")).toContainText(
+    "Keep this conversation visible",
+  );
+  await expect(chat.getByRole("status")).toContainText("Waiting for");
+  await expect(page.getByRole("tab", { selected: true })).toHaveText(
+    "Assistant",
+  );
+  await expect(
+    chat.locator(".nx-messages article.nx-assistant-message"),
+  ).toContainText("No changes have been applied");
+  await expect(
+    chat.getByRole("button", { name: "Send", exact: true }),
+  ).toBeDisabled();
+  assert.equal(await page.getByRole("tab").count(), tabCount);
+  assert.equal(
+    requests.length - beforeFirstSend,
+    1,
+    "Duplicate submission must not send a second request",
+  );
+  assert.equal((await rpc("next_snapshot")).thread.length, beforeThreads + 1);
+  mode = "invalid";
+  await chat
+    .getByLabel("Message", { exact: true })
+    .fill("Retry remains in this conversation");
+  await chat.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(chat.getByRole("alert")).toContainText("could not be repaired");
+  await expect(chat.getByLabel("Pending message")).toContainText(
+    "Retry remains in this conversation",
+  );
+  mode = "delayed-chat";
+  await chat.getByRole("button", { name: "Resend message", exact: true }).click();
+  await expect(
+    chat.locator(".nx-messages article.nx-assistant-message"),
+  ).toHaveCount(2);
+  await expect(chat.getByLabel("Message", { exact: true })).toHaveValue("");
+  assert.equal((await rpc("next_snapshot")).thread.length, beforeThreads + 1);
+  mode = "normal";
+  await page
+    .locator(".nx-sidebar")
+    .getByRole("button", { name: "Assistant", exact: true })
+    .click();
+  await expect(
+    page.locator(".nx-chat:visible").getByLabel(/^Destination/),
+  ).toBeVisible();
+  const tabsWithNewDraft = await page.getByRole("tab").count();
+  await page
+    .locator(".nx-thread-list")
+    .getByRole("button", {
+      name: "Keep this conversation visible",
+      exact: true,
+    })
+    .click();
+  assert.equal(
+    await page.getByRole("tab").count(),
+    tabsWithNewDraft,
+    "Recent conversation should reuse its tab",
+  );
+  await expect(
+    chat.locator(".nx-messages article.nx-assistant-message"),
+  ).toHaveCount(2);
+  await page
+    .locator(".nx-sidebar")
+    .getByRole("button", { name: "AI draft check", exact: true })
+    .click();
+  const readiness = page.getByRole("region", { name: "Network readiness" });
+  await expect(readiness).toContainText("Resources configured");
+  await readiness
+    .locator("summary")
+    .filter({ hasText: "Sample tests" })
+    .click();
+  await readiness
+    .getByRole("button", { name: "Test with sample data…" })
+    .click();
+  const testDialog = page.getByRole("dialog", { name: "Review sample test" });
+  await testDialog.getByRole("button", { name: "Choose sample JSON…" }).click();
+  await testDialog
+    .getByRole("button", { name: "Choose expected JSON…" })
+    .click();
+  await testDialog
+    .getByLabel("I reviewed this test's code, data destinations and writes.")
+    .check();
+  await testDialog
+    .getByRole("button", { name: "Run reviewed test", exact: true })
+    .click();
+  await expect(
+    testDialog.getByRole("heading", { name: "Result: passed", exact: true }),
+  ).toBeVisible();
+  await testDialog.screenshot({
+    path: "../../docs/screenshots/next-sample-test.png",
+  });
+  await testDialog.getByRole("button", { name: "Close", exact: true }).click();
   await page
     .getByRole("tab", { name: "Vocabulary practice", exact: true })
     .last()

@@ -12,6 +12,7 @@ export function AccountSettings({
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [preview, setPreview] = useState<{
     remote_revision: number;
     local_revision: number;
@@ -32,11 +33,12 @@ export function AccountSettings({
     if (s.email) setEmail(s.email);
   }
   useEffect(() => {
-    void status().catch(() => {});
+    void status().catch((e) => setError(String(e)));
   }, []);
   async function run(action: string, payload: unknown = {}) {
     setBusy(true);
     setMessage("");
+    setError("");
     if (action !== "calendar_sync") setPreview(null);
     try {
       const result = await rpc<any>(action, payload);
@@ -45,7 +47,7 @@ export function AccountSettings({
       await refresh();
       return result;
     } catch (e) {
-      setMessage(String(e));
+      setError(String(e).replace(/^Error: /, ""));
     } finally {
       setBusy(false);
     }
@@ -94,6 +96,10 @@ export function AccountSettings({
       </button>
       {!connected ? (
         <>
+          <p className="small muted">
+            To create an account, use Create account and confirm the email
+            before signing in. Invalid credentials are rejected by Supabase.
+          </p>
           <label>
             Email
             <input
@@ -119,7 +125,9 @@ export function AccountSettings({
                 email,
                 password,
                 signup: false,
-              }).then(() => setPassword(""));
+              }).then((result) => {
+                if (result !== undefined) setPassword("");
+              });
             }}
           >
             Sign in
@@ -131,7 +139,9 @@ export function AccountSettings({
                 email,
                 password,
                 signup: true,
-              }).then(() => setPassword(""));
+              }).then((result) => {
+                if (result !== undefined) setPassword("");
+              });
             }}
           >
             Create account
@@ -196,6 +206,7 @@ export function AccountSettings({
         </div>
       )}
       <p role="status">{busy ? "Working…" : message}</p>
+      {error && <p role="alert">{error}</p>}
     </section>
   );
 }

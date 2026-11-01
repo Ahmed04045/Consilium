@@ -7,7 +7,14 @@ use std::path::PathBuf;
 pub fn source_path(input: &str) -> Result<PathBuf> {
     let path = PathBuf::from(input);
     let path = if path.is_dir() {
-        path.join("project.consilium")
+        {
+            let modern = path.join("project.consi");
+            if modern.exists() {
+                modern
+            } else {
+                path.join("project.consilium")
+            }
+        }
     } else {
         path
     };

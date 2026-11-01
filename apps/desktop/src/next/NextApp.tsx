@@ -30,14 +30,19 @@ import {
   TabDescriptor,
   taskDefault,
   flushDocuments,
+  colorInk,
 } from "./state";
-import { HomeView, SearchView, SettingsView } from "./WorkspaceViews";
+import { HomeView, SearchView } from "./WorkspaceViews";
 import { CalendarView, TaskView, TaskForm } from "./CalendarViews";
 import { AssistantView, DocumentView } from "./ContentViews";
 const NetworkView = lazy(() =>
   import("./NetworkView").then((m) => ({ default: m.NetworkView })),
 );
 import "./next.css";
+import { SettingsScreen } from "./SettingsScreen";
+import { AppMenu } from "./AppMenus";
+import { themeFor } from "./theme";
+import { Sidebar } from "./Sidebar";
 const home: TabDescriptor = {
   id: "home",
   kind: "home",
@@ -49,9 +54,26 @@ export default function NextApp() {
     [loaded, setLoaded] = useState(false),
     [tabs, setTabs] = useState<TabDescriptor[]>(() => {
       try {
-        return JSON.parse(localStorage.getItem("next-tabs") || "[]").length
-          ? JSON.parse(localStorage.getItem("next-tabs")!)
-          : [home];
+        const saved: TabDescriptor[] = JSON.parse(
+          localStorage.getItem("next-tabs") || "[]",
+        );
+        let assistant = false;
+        const normalized = saved
+          .filter((t) => t.kind !== "settings")
+          .filter((t) => {
+            if (!["assistant", "thread"].includes(t.kind)) return true;
+            if (assistant) return false;
+            assistant = true;
+            return true;
+          })
+          .map((t) =>
+            ["assistant", "thread"].includes(t.kind)
+              ? { ...t, kind: "assistant", title: "Assistant" }
+              : t,
+          );
+        return normalized.some((t) => t.id === "home")
+          ? normalized
+          : [home, ...normalized];
       } catch {
         return [home];
       }
@@ -70,7 +92,117 @@ export default function NextApp() {
     [appearance, setAppearance] = useState(readAppearance),
     [history, setHistory] = useState(["home"]),
     [historyIndex, setHistoryIndex] = useState(0);
+  const [settingsPage, setSettingsPage] = useState<string | null>(null);
+  const [settingsMounted, setSettingsMounted] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const editTarget = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const focus = (event: FocusEvent) => {
+      const el = event.target as HTMLElement;
+      if (el.matches('input,textarea,[contenteditable="true"]'))
+        editTarget.current = el;
+    };
+    document.addEventListener("focusin", focus);
+    return () => document.removeEventListener("focusin", focus);
+  }, []);
+  async function showSettings(page = "appearance") {
+    const current = tabs.find((tab) => tab.id === active);
+    if (
+      current?.kind === "document" &&
+      !(await flushDocuments(current.objectId))
+    ) {
+      error("Save or recover your document before opening Settings.");
+      return;
+    }
+    setSettingsMounted(true);
+    setSettingsPage(page);
+  }
+  async function edit(command: string) {
+    const el = editTarget.current;
+    if (!el || !el.isConnected || el.closest("[hidden]")) {
+      error(
+        "Select a text field first. Documents use their own editing toolbar.",
+      );
+      return;
+    }
+    el.focus();
+    try {
+      if (command === "paste")
+        document.execCommand(
+          "insertText",
+          false,
+          await navigator.clipboard.readText(),
+        );
+      else document.execCommand(command);
+    } catch {
+      error(
+        "Clipboard access is unavailable. Use the keyboard shortcut in the editor.",
+      );
+    }
+  }
+  function cycleTab(direction: number) {
+    setSettingsPage(null);
+    const index = tabs.findIndex((t) => t.id === active);
+    void activate(tabs[(index + direction + tabs.length) % tabs.length].id);
+  }
+  async function fullscreen() {
+    try {
+      if (native) {
+        const win = getCurrentWindow();
+        await win.setFullscreen(!(await win.isFullscreen()));
+      } else if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch (e) {
+      error(e);
+    }
+  }
+  useEffect(() => {
+    const dismiss = (event: Event) => {
+      document
+        .querySelectorAll<HTMLDetailsElement>(
+          ".nx-menu[open],.nx-network-menu[open]",
+        )
+        .forEach((menu) => {
+          if (event.type === "keydown" || !menu.contains(event.target as Node))
+            menu.open = false;
+        });
+    };
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") dismiss(event);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", key);
+    };
+  }, []);
+  useEffect(() => {
+    const removed = (event: Event) => {
+      const keys = (event as CustomEvent<string[]>).detail;
+      setTabs((old) =>
+        old
+          .filter((t) => !keys.includes(t.kind + ":" + t.objectId))
+          .map((t) =>
+            t.kind === "assistant" && keys.includes("thread:" + t.objectId)
+              ? { ...t, objectId: "draft" }
+              : t,
+          ),
+      );
+      if (
+        keys.includes(
+          tabs.find((t) => t.id === active)?.kind +
+            ":" +
+            tabs.find((t) => t.id === active)?.objectId,
+        )
+      )
+        setActive("home");
+    };
+    window.addEventListener("consilium-items-deleted", removed);
+    return () => window.removeEventListener("consilium-items-deleted", removed);
+  }, [active, tabs]);
   const search = useRef<HTMLInputElement>(null);
+  const tabBar = useRef<HTMLElement>(null);
   const navigation = useRef(0);
   useEffect(
     () =>
@@ -81,7 +213,25 @@ export default function NextApp() {
   );
   const error = (e: unknown) => setMessage(String(e).replace(/^Error: /, ""));
   async function refresh() {
-    setData(await call("next_snapshot"));
+    const snapshot = await call<Snapshot>("next_snapshot");
+    const reset = snapshot.layout?.find((r) => r.value.id === "workspace-reset")
+      ?.value.token;
+    if (reset && localStorage.getItem("next-reset-seen") !== reset) {
+      for (const key of Object.keys(localStorage))
+        if (
+          key === "next-tabs" ||
+          key === "next-navigation-groups" ||
+          key.startsWith("network-draft:")
+        )
+          localStorage.removeItem(key);
+      localStorage.setItem("next-reset-seen", reset);
+      setTabs([home]);
+      setActive("home");
+      setVisited(["home"]);
+      setHistory(["home"]);
+      setHistoryIndex(0);
+    }
+    setData(snapshot);
   }
   useEffect(() => {
     if (!native || !data.automation?.some((r) => r.value.enabled)) return;
@@ -100,6 +250,11 @@ export default function NextApp() {
     () => localStorage.setItem("next-tabs", JSON.stringify(tabs)),
     [tabs],
   );
+  useEffect(() => {
+    tabBar.current
+      ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [active, tabs.length]);
   async function activate(id: string, historyTarget?: number) {
     const request = ++navigation.current;
     const current = tabs.find((tab) => tab.id === active);
@@ -112,6 +267,7 @@ export default function NextApp() {
       }
     }
     if (request !== navigation.current) return;
+    setSettingsPage(null);
     setActive(id);
     if (historyTarget !== undefined) setHistoryIndex(historyTarget);
     else {
@@ -120,7 +276,48 @@ export default function NextApp() {
     }
   }
   function open(kind: string, id = "", title?: string) {
-    const key = kind === "home" ? "home" : `${kind}:${id}`;
+    if (kind === "settings") {
+      void showSettings();
+      return;
+    }
+    setSettingsPage(null);
+    if (kind === "assistant" || kind === "thread") {
+      const existing = tabs.find(
+        (t) => t.kind === "assistant" || t.kind === "thread",
+      );
+      const key = existing?.id || "assistant";
+      const nextId =
+        kind === "thread" ? id : id.startsWith("draft:") ? "draft" : id;
+      setTabs((old) =>
+        existing
+          ? old.map((t) =>
+              t.id === key
+                ? {
+                    ...t,
+                    kind: "assistant",
+                    objectId: nextId,
+                    title: "Assistant",
+                  }
+                : t,
+            )
+          : [
+              ...old,
+              {
+                id: key,
+                kind: "assistant",
+                objectId: nextId,
+                title: "Assistant",
+              },
+            ],
+      );
+      void activate(key);
+      return;
+    }
+    const existing = tabs.find((t) => t.kind === kind && t.objectId === id);
+    const base = kind === "home" ? "home" : `${kind}:${id}`;
+    const key =
+      existing?.id ||
+      (tabs.some((t) => t.id === base) ? `${base}:${uid()}` : base);
     setTabs((t) =>
       t.some((x) => x.id === key)
         ? t
@@ -139,6 +336,21 @@ export default function NextApp() {
           ],
     );
     activate(key);
+  }
+  function bindThread(tabId: string, threadId: string, title: string) {
+    // Keep the React/tab identity: an in-flight request belongs to this view.
+    setTabs((previous) =>
+      previous.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              kind: "assistant",
+              objectId: threadId,
+              title: "Assistant",
+            }
+          : tab,
+      ),
+    );
   }
   async function close(id: string) {
     if (id === "home") return;
@@ -192,6 +404,60 @@ export default function NextApp() {
   }
   useEffect(() => {
     function key(e: KeyboardEvent) {
+      if (e.ctrlKey && e.key === ",") {
+        e.preventDefault();
+        void showSettings();
+        return;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        setSide((s) => !s);
+        return;
+      }
+      if (e.ctrlKey && ["PageUp", "PageDown"].includes(e.key)) {
+        e.preventDefault();
+        cycleTab(e.key === "PageUp" ? -1 : 1);
+        return;
+      }
+      if (e.ctrlKey && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        if (settingsPage) setSettingsPage(null);
+        else void close(active);
+        return;
+      }
+      if (e.ctrlKey && ["+", "=", "-", "0"].includes(e.key)) {
+        e.preventDefault();
+        setZoom((z) =>
+          e.key === "0"
+            ? 1
+            : Math.max(0.8, Math.min(1.5, z + (e.key === "-" ? -0.1 : 0.1))),
+        );
+        return;
+      }
+      if (e.key === "F11") {
+        e.preventDefault();
+        void fullscreen();
+        return;
+      }
+      if (e.altKey && ["ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        if (settingsPage) {
+          if (e.key === "ArrowLeft") setSettingsPage(null);
+          return;
+        }
+        const index = historyIndex + (e.key === "ArrowLeft" ? -1 : 1);
+        if (index >= 0 && index < history.length)
+          void activate(
+            tabs.some((t) => t.id === history[index]) ? history[index] : "home",
+            index,
+          );
+        return;
+      }
+      if (e.ctrlKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        search.current?.focus();
+        return;
+      }
       if (e.key === "Tab") {
         const dialog = document.querySelector<HTMLElement>(
           '.nx-overlay [role="dialog"],.nx-overlay .nx-dialog',
@@ -234,7 +500,7 @@ export default function NextApp() {
     }
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [data, active]);
+  }, [data, active, tabs, history, historyIndex, settingsPage]);
   async function finishCreate() {
     try {
       if (createKind === "task") {
@@ -291,24 +557,55 @@ export default function NextApp() {
     );
   return (
     <WorkspaceContext.Provider
-      value={{ data, refresh, save, open, create, error, busy, setBusy }}
+      value={{
+        data,
+        refresh,
+        save,
+        open,
+        bindThread,
+        create,
+        error,
+        busy,
+        setBusy,
+      }}
     >
       <div
-        className={`next-app palette-${appearance.palette}`}
+        className={`next-app palette-${appearance.palette} nx-density-${appearance.density}`}
         style={
           {
+            ...(appearance.backgroundColor
+              ? themeFor(appearance.backgroundColor)
+              : {}),
             "--nx-row": `${appearance.rowHeight}px`,
-            "--accent": (
-              {
-                green: "#a3c9ae",
-                blue: "#99bce8",
-                purple: "#bca5df",
-                amber: "#ddc188",
-              } as Record<string, string>
-            )[appearance.accent],
+            "--accent":
+              appearance.accentColor ||
+              (
+                {
+                  green: "#a3c9ae",
+                  blue: "#99bce8",
+                  purple: "#bca5df",
+                  amber: "#ddc188",
+                } as Record<string, string>
+              )[appearance.accent],
+            "--accent-ink": colorInk(
+              appearance.accentColor ||
+                (
+                  {
+                    green: "#a3c9ae",
+                    blue: "#99bce8",
+                    purple: "#bca5df",
+                    amber: "#ddc188",
+                  } as Record<string, string>
+                )[appearance.accent],
+            ),
             "--nx-gap": `${appearance.rowGap}px`,
             "--nx-col-gap": `${appearance.columnGap}px`,
             "--nx-hour": `${appearance.hourHeight}px`,
+            "--type-body": `${appearance.fontSize}px`,
+            "--type-small": `${Math.max(10, appearance.fontSize - 2)}px`,
+            "--type-control": `${Math.max(11, appearance.fontSize - 1)}px`,
+            "--type-heading": `${appearance.fontSize + 2}px`,
+            "--type-title": `${appearance.fontSize + 8}px`,
             fontSize: appearance.fontSize,
           } as React.CSSProperties
         }
@@ -316,8 +613,14 @@ export default function NextApp() {
         <header className="nx-title">
           <button
             aria-label="Back"
-            disabled={historyIndex === 0}
+            className="nx-navigation-button"
+            title={settingsPage ? "Back to app" : "Back (Alt+Left)"}
+            disabled={!settingsPage && historyIndex === 0}
             onClick={() => {
+              if (settingsPage) {
+                setSettingsPage(null);
+                return;
+              }
               void activate(
                 tabs.some((t) => t.id === history[historyIndex - 1])
                   ? history[historyIndex - 1]
@@ -330,14 +633,20 @@ export default function NextApp() {
           </button>
           <button
             aria-label="Forward"
-            disabled={historyIndex >= history.length - 1}
+            className="nx-navigation-button"
+            title="Forward (Alt+Right)"
+            disabled={!!settingsPage || historyIndex >= history.length - 1}
             onClick={() => {
               void activate(history[historyIndex + 1], historyIndex + 1);
             }}
           >
             <ArrowRight size={15} />
           </button>
-          <button aria-label="Toggle sidebar" onClick={() => setSide(!side)}>
+          <button
+            aria-label="Toggle sidebar"
+            disabled={!!settingsPage}
+            onClick={() => setSide(!side)}
+          >
             <PanelLeft size={16} />
           </button>
           <details className="nx-menu">
@@ -374,7 +683,130 @@ export default function NextApp() {
               </button>
             </div>
           </details>
-          <button onClick={() => open("settings")}>Settings</button>
+          <AppMenu
+            label="Edit"
+            items={[
+              ...[
+                ["Undo", "undo", "Ctrl+Z"],
+                ["Redo", "redo", "Ctrl+Y"],
+                ["Cut", "cut", "Ctrl+X"],
+                ["Copy", "copy", "Ctrl+C"],
+                ["Paste", "paste", "Ctrl+V"],
+                ["Delete", "delete", "Delete"],
+                ["Select all", "selectAll", "Ctrl+A"],
+              ].map(([label, command, shortcut]) => ({
+                label,
+                shortcut,
+                action: () => void edit(command),
+                divider: command === "cut" || command === "selectAll",
+              })),
+              {
+                label: "Settings…",
+                shortcut: "Ctrl+,",
+                divider: true,
+                action: () => void showSettings(),
+              },
+            ]}
+          />
+          <AppMenu
+            label="View"
+            items={[
+              {
+                label: side ? "Hide sidebar" : "Show sidebar",
+                shortcut: "Ctrl+Shift+S",
+                action: () => setSide(!side),
+                disabled: !!settingsPage,
+              },
+              {
+                label: "Find",
+                shortcut: "Ctrl+F",
+                action: () => search.current?.focus(),
+              },
+              {
+                label: "Back",
+                shortcut: "Alt+Left",
+                disabled: !settingsPage && historyIndex === 0,
+                action: () =>
+                  settingsPage
+                    ? setSettingsPage(null)
+                    : void activate(
+                        tabs.some((t) => t.id === history[historyIndex - 1])
+                          ? history[historyIndex - 1]
+                          : "home",
+                        historyIndex - 1,
+                      ),
+              },
+              {
+                label: "Forward",
+                shortcut: "Alt+Right",
+                disabled: !!settingsPage || historyIndex >= history.length - 1,
+                action: () =>
+                  void activate(history[historyIndex + 1], historyIndex + 1),
+              },
+              {
+                label: "Previous tab",
+                shortcut: "Ctrl+PageUp",
+                divider: true,
+                action: () => cycleTab(-1),
+              },
+              {
+                label: "Next tab",
+                shortcut: "Ctrl+PageDown",
+                action: () => cycleTab(1),
+              },
+              {
+                label: "Zoom in",
+                shortcut: "Ctrl++",
+                divider: true,
+                disabled: zoom >= 1.5,
+                action: () => setZoom((z) => Math.min(1.5, z + 0.1)),
+              },
+              {
+                label: "Zoom out",
+                shortcut: "Ctrl+-",
+                disabled: zoom <= 0.8,
+                action: () => setZoom((z) => Math.max(0.8, z - 0.1)),
+              },
+              {
+                label: "Actual size",
+                shortcut: "Ctrl+0",
+                action: () => setZoom(1),
+              },
+              {
+                label: "Toggle full screen",
+                shortcut: "F11",
+                divider: true,
+                action: () => void fullscreen(),
+              },
+            ]}
+          />
+          <AppMenu
+            label="Help"
+            items={[
+              {
+                label: "Documentation",
+                action: () => void showSettings("help"),
+              },
+              {
+                label: "Keyboard shortcuts",
+                action: () => void showSettings("shortcuts"),
+              },
+              {
+                label: "What’s new",
+                action: () => void showSettings("whats-new"),
+              },
+              {
+                label: "Troubleshooting",
+                divider: true,
+                action: () => void showSettings("troubleshooting"),
+              },
+              {
+                label: "About Consilium",
+                divider: true,
+                action: () => void showSettings("about"),
+              },
+            ]}
+          />
           <div className="nx-search">
             <Search size={14} />
             <input
@@ -418,76 +850,16 @@ export default function NextApp() {
             )}
           </div>
         </header>
-        <div className="nx-body">
-          {side && (
-            <aside className="nx-sidebar">
-              <button className="nx-brand" onClick={() => open("home")}>
-                <img src="/app-icon.png" alt="" />
-                Consilium
-              </button>
-              <button className="nx-create" onClick={() => create()}>
-                <Plus size={17} />
-                Create
-              </button>
-              {[
-                ["home", "Home"],
-                ["assistant", "Assistant"],
-                ["search", "Search"],
-              ].map(([kind, label]) => (
-                <button key={kind} onClick={() => open(kind)}>
-                  {icon(kind)}
-                  {label}
-                </button>
-              ))}
-              <small>Calendars</small>
-              {data.calendar.map((r) => (
-                <button
-                  key={r.value.id}
-                  onClick={() => open("calendar", r.value.id, r.value.name)}
-                >
-                  <CalendarDays size={15} />
-                  <span>{r.value.name}</span>
-                </button>
-              ))}
-              <small>Networks</small>
-              {data.network.map((r) => (
-                <button
-                  key={r.value.id}
-                  onClick={() => open("network", r.value.id, r.value.name)}
-                >
-                  <Network size={15} />
-                  <span>{r.value.name}</span>
-                </button>
-              ))}
-              <small>Recent conversations</small>
-              {data.thread
-                .slice(-6)
-                .reverse()
-                .map((r) => (
-                  <button
-                    key={r.value.id}
-                    onClick={() => open("thread", r.value.id, r.value.title)}
-                  >
-                    <MessageSquare size={14} />
-                    <span>{r.value.title}</span>
-                  </button>
-                ))}
-              <div className="nx-side-bottom">
-                <button onClick={() => open("settings")}>
-                  <Settings size={16} />
-                  Settings
-                </button>
-                <small>Next · local preview</small>
-              </div>
-            </aside>
-          )}
+        <div className="nx-body" hidden={!!settingsPage} style={{ zoom }}>
+          {side && <Sidebar active={tabs.find((t) => t.id === active)} />}
           <main className="nx-main">
-            <nav className="nx-tabs" aria-label="Workspace tabs">
+            <nav ref={tabBar} className="nx-tabs" aria-label="Workspace tabs">
               {tabs.map((t) => (
                 <div className={active === t.id ? "selected" : ""} key={t.id}>
                   <button
                     role="tab"
                     aria-selected={active === t.id}
+                    title={t.title}
                     onClick={() => activate(t.id)}
                   >
                     {icon(t.kind)}
@@ -522,15 +894,16 @@ export default function NextApp() {
                   ) : t.kind === "task" ? (
                     <TaskView id={t.objectId} />
                   ) : t.kind === "document" ? (
-                    <DocumentView id={t.objectId} active={active === t.id} />
+                    <DocumentView
+                      id={t.objectId}
+                      active={active === t.id && !settingsPage}
+                    />
                   ) : t.kind === "network" ? (
                     <Suspense fallback={<p>Opening network…</p>}>
                       <NetworkView id={t.objectId} />
                     </Suspense>
                   ) : t.kind === "assistant" || t.kind === "thread" ? (
-                    <AssistantView id={t.objectId} />
-                  ) : t.kind === "settings" ? (
-                    <SettingsView />
+                    <AssistantView id={t.objectId} tabId={t.id} />
                   ) : (
                     <SearchView />
                   )}
@@ -538,6 +911,19 @@ export default function NextApp() {
               ))}
           </main>
         </div>
+        {settingsMounted && (
+          <div
+            className="nx-settings-host"
+            hidden={!settingsPage}
+            style={{ zoom }}
+          >
+            <SettingsScreen
+              page={settingsPage || "appearance"}
+              onPage={setSettingsPage}
+              onBack={() => setSettingsPage(null)}
+            />
+          </div>
+        )}
         {message && (
           <div className="nx-toast" role="status">
             {message}
@@ -560,7 +946,19 @@ export default function NextApp() {
               aria-label="Create"
             >
               <header>
-                <h2>Create</h2>
+                <div className="nx-dialog-heading">
+                  {createKind && (
+                    <button
+                      className="nx-navigation-button"
+                      aria-label="Back to create options"
+                      title="Back to create options"
+                      onClick={() => setCreateKind("")}
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
+                  )}
+                  <h2>Create</h2>
+                </div>
                 <button aria-label="Close" onClick={() => setCreator(false)}>
                   <X size={18} />
                 </button>
@@ -582,7 +980,6 @@ export default function NextApp() {
                 </div>
               ) : (
                 <>
-                  <button onClick={() => setCreateKind("")}>← Back</button>
                   {createKind === "task" ? (
                     <label>
                       Destination calendar
