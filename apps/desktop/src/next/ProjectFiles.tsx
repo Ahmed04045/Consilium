@@ -36,7 +36,7 @@ export function ProjectFiles({
     setBusy(true);
     try {
       if (!(await flushDocuments()))
-        throw Error("Save or resolve open document changes first.");
+        throw Error("Save or recover unsaved edits before exporting this project.");
       await beforeSave?.();
       const result = await call(
         existing ? "next_project_write" : "next_project_dialog",

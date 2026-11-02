@@ -22,12 +22,14 @@ import {
   Trash2,
   Folder,
   MousePointer2,
+  PenLine,
   MoreHorizontal,
 } from "lucide-react";
 import { useWorkspace, row, call, Data, uid, download } from "./state";
 import { catalog, groups, nodeSummary } from "./NodeCatalog";
 import { NodeProperties } from "./NodeProperties";
 import { NetworkFiles } from "./NetworkFiles";
+import { AnnotationBoard } from "./Annotations";
 import { ProjectFiles } from "./ProjectFiles";
 import { AutomationSetup, AutomationStatus } from "./Automation";
 import { NetworkChecks } from "./NetworkChecks";
@@ -220,6 +222,8 @@ export function NetworkView({ id }: { id: string }) {
   const [measured, setMeasured] = useState<
     Record<string, { width?: number; height?: number }>
   >({});
+  const [drawing, setDrawing] = useState(false);
+  const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [canvasQuery, setCanvasQuery] = useState(""),
     [multi, setMulti] = useState<string[]>([]),
     [groupName, setGroupName] = useState("");
@@ -469,6 +473,14 @@ export function NetworkView({ id }: { id: string }) {
           <Redo size={16} />
         </button>
         <span className="nx-spacer" />
+        <button
+          aria-label="Draw on network"
+          title="Draw on network"
+          aria-pressed={drawing}
+          onClick={() => setDrawing(!drawing)}
+        >
+          <PenLine size={17} /> Draw
+        </button>
         <details className="nx-network-menu">
           <summary aria-label="Network actions" title="Save, export and more">
             <MoreHorizontal size={19} />
@@ -653,7 +665,9 @@ export function NetworkView({ id }: { id: string }) {
           <ReactFlow
             onInit={(instance) => {
               flow.current = instance;
+              setViewport(instance.getViewport());
             }}
+            onMove={(_, next) => setViewport(next)}
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
@@ -757,6 +771,14 @@ export function NetworkView({ id }: { id: string }) {
             <Controls />
             <MiniMap pannable zoomable />
           </ReactFlow>
+          <AnnotationBoard
+            ownerKind="network"
+            ownerId={id}
+            viewKey="canvas"
+            active={drawing}
+            onActive={setDrawing}
+            viewport={viewport}
+          />
         </div>
         <aside className="nx-inspector">
           <NetworkFiles graph={graph} />

@@ -1,5 +1,7 @@
 //! Versioned workspace services shared by the desktop and command line.
 mod addons;
+#[cfg(test)]
+mod annotation_tests;
 mod authoring;
 mod automation;
 mod conversation;
@@ -36,6 +38,7 @@ const KINDS: &[&str] = &[
     "automation",
     "addon",
     "test",
+    "annotation",
 ];
 impl Engine {
     fn mutation_epoch(&self) -> Result<(String, i64, Value)> {
@@ -170,6 +173,28 @@ impl Engine {
                     ensure!(path.exists(), "The bound resource does not exist");
                 }
             }
+            "annotation" => {
+                let board: consilium_domain::annotations::AnnotationBoard = decode(value.clone())?;
+                board.validate()?;
+                self.next_get::<Value>(&board.owner_kind, &board.owner_id)?;
+                for existing in self.next_list("annotation")? {
+                    ensure!(
+                        existing.value["id"] == id
+                            || existing.value["owner_kind"] != board.owner_kind
+                            || existing.value["owner_id"] != board.owner_id
+                            || existing.value["view_key"] != board.view_key,
+                        "This drawing changed in another window. Load its saved version first."
+                    );
+                }
+                if let Some(old) = self.store.read::<Value>(&key("annotation", id))? {
+                    ensure!(
+                        old.value["owner_kind"] == board.owner_kind
+                            && old.value["owner_id"] == board.owner_id
+                            && old.value["view_key"] == board.view_key,
+                        "Drawing ownership cannot change"
+                    );
+                }
+            }
             "layout" => {
                 ensure!(value.to_string().len() < 100_000, "Layout is too large");
             }
@@ -266,6 +291,13 @@ impl Engine {
                             if record.value["calendar_id"] == id {
                                 records.push((child.into(), record));
                             }
+                        }
+                    }
+                }
+                if ["calendar", "network"].contains(&kind) {
+                    for board in self.next_list("annotation")? {
+                        if board.value["owner_kind"] == kind && board.value["owner_id"] == id {
+                            records.push(("annotation".into(), board));
                         }
                     }
                 }

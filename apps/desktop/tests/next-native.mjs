@@ -766,6 +766,15 @@ try {
   await page.getByLabel("Calendar view").selectOption("Month");
   const events = page.locator(".nx-event-title");
   await events.first().waitFor();
+  await page.getByRole("button", { name: "Draw on calendar" }).click();
+  const ink = page.locator(".nx-ink-layer:visible");
+  const inkBox = await ink.boundingBox();
+  await page.mouse.move(inkBox.x + 100, inkBox.y + 80);
+  await page.mouse.down();
+  await page.mouse.move(inkBox.x + 180, inkBox.y + 130, { steps: 12 });
+  await page.mouse.up();
+  await expect.poll(async () => (await rpc("next_snapshot")).annotation.length).toBe(1);
+  await page.keyboard.press("Escape");
   await page.screenshot({ path: "../../docs/screenshots/next-calendar.png" });
   await events.first().click();
   await page
@@ -823,6 +832,16 @@ try {
     "interpret",
   );
   await page.getByLabel("Search this network").fill("");
+  const originalGraph = (await rpc("next_snapshot")).network.find(r => r.value.id === codeData.id);
+  await page.getByRole("button", { name: "Draw on network" }).click();
+  const networkInk = await page.locator(".nx-ink-layer:visible").boundingBox();
+  await page.mouse.move(networkInk.x + 70, networkInk.y + 110);
+  await page.mouse.down();
+  await page.mouse.move(networkInk.x + 130, networkInk.y + 150, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(async () => (await rpc("next_snapshot")).annotation.filter(r => r.value.owner_id === codeData.id).length).toBe(1);
+  await page.keyboard.press("Escape");
+  assert.deepEqual((await rpc("next_snapshot")).network.find(r => r.value.id === codeData.id), originalGraph);
   await page.screenshot({ path: "../../docs/screenshots/next-network.png" });
   await page.getByLabel("Network actions").click();
   await page.getByRole("button", { name: "Export…", exact: true }).click();
@@ -860,6 +879,10 @@ try {
     const opened = await rpc("next_project_read", { path: projectPath });
     assert.equal(opened.kind, kind);
     assert.notEqual(opened.id, id);
+    const drawings = (await rpc("next_snapshot")).annotation;
+    const copied = drawings.find(r => r.value.owner_id === opened.id);
+    assert(copied, "Portable project must preserve its drawing");
+    assert.deepEqual(copied.value.marks, drawings.find(r => r.value.owner_id === id).value.marks);
   }
   assert.equal((await rpc("next_snapshot")).run.length, beforeProjectRuns);
   const addons = await rpc("next_addon_samples");

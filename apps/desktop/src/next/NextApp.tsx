@@ -355,8 +355,12 @@ export default function NextApp() {
   async function close(id: string) {
     if (id === "home") return;
     const tab = tabs.find((t) => t.id === id);
-    if (tab?.kind === "document" && !(await flushDocuments(tab.objectId))) {
-      error("Save or recover the document draft before closing its tab.");
+    if (
+      tab &&
+      ["document", "calendar", "network"].includes(tab.kind) &&
+      !(await flushDocuments(tab.objectId))
+    ) {
+      error("Save or recover unsaved edits before closing this tab.");
       return;
     }
     setTabs((t) => t.filter((x) => x.id !== id));
@@ -369,7 +373,7 @@ export default function NextApp() {
       if (await flushDocuments()) await getCurrentWindow().destroy();
       else
         error(
-          "A document has an unsaved or conflicting draft. Save or export it before closing.",
+          "There are unsaved or conflicting edits. Save or export them before closing.",
         );
     });
     return () => {

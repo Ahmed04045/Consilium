@@ -674,7 +674,7 @@
   border-bottom: 1px solid var(--line);
   min-width: 0;
 }
-.nx-day:nth-child(7n) {
+.nx-day:nth-of-type(7n) {
   border-right: 0;
 }
 .nx-day-number {
@@ -780,7 +780,7 @@
   margin-top: 12px;
   background: var(--input);
 }
-.nx-day:nth-child(7n) .nx-task-preview {
+.nx-day:nth-of-type(7n) .nx-task-preview {
   left: auto;
   right: 0;
 }
@@ -793,6 +793,7 @@
 .nx-hour-head,
 .nx-hour-body {
   display: grid;
+  min-width: calc(55px + var(--days) * 120px);
   grid-template-columns: 55px repeat(var(--days), minmax(120px, 1fr));
 }
 .nx-hour-head {
@@ -2217,4 +2218,113 @@
 .nx-density-compact .nx-list-row {
   padding-top: 8px;
   padding-bottom: 8px;
+}
+
+/* Ink is separate from task controls and executable graph data. */
+.nx-annotated {
+  position: relative;
+}
+.nx-ink-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 6;
+  pointer-events: none;
+  overflow: hidden;
+}
+.nx-ink-layer.nx-ink-active {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: crosshair;
+}
+.nx-ink-layer.nx-ink-eraser {
+  cursor: cell;
+}
+.nx-ink-panel {
+  position: absolute;
+  z-index: 12;
+  top: 42px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 16px);
+  pointer-events: none;
+}
+.nx-ink-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px #0003;
+  pointer-events: auto;
+}
+.next-app .nx-ink-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+}
+.nx-ink-toolbar button[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--accent);
+}
+.next-app .nx-ink-toolbar input[type="color"] {
+  width: 32px;
+  height: 32px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.next-app .nx-ink-toolbar select {
+  width: 57px;
+  height: 32px;
+  padding: 3px;
+  margin: 0;
+}
+.nx-calendar-annotation-tools:empty {
+  display: none;
+}
+.nx-ink-panel.nx-ink-inline {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  margin: 0 auto 12px;
+  max-width: 100%;
+}
+.nx-ink-error {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 580px;
+  pointer-events: auto;
+}
+.nx-ink-error > span {
+  flex-basis: 100%;
+  font-size: var(--type-small);
+}
+.nx-visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

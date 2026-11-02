@@ -54,6 +54,7 @@ const kinds = [
   "artifact",
   "automation",
   "addon",
+  "annotation",
 ];
 export const empty = () =>
   Object.fromEntries(kinds.map((k) => [k, []])) as Snapshot;
@@ -148,7 +149,9 @@ export const useWorkspace = () => useContext(WorkspaceContext);
 export const documentFlushers = new Map<string, () => Promise<boolean>>();
 export async function flushDocuments(id?: string) {
   const handlers = id
-    ? [documentFlushers.get(id)].filter(Boolean)
+    ? [...documentFlushers.entries()]
+        .filter(([key]) => key === id || key.startsWith(`drawing:${id}:`))
+        .map(([, handler]) => handler)
     : [...documentFlushers.values()];
   return (await Promise.all(handlers.map((handler) => handler!()))).every(
     Boolean,

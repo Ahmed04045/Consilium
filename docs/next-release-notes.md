@@ -1,3 +1,13 @@
+# Consilium 3.1.0-beta.1 — whiteboard preview
+
+- Draw, circle and highlight directly on calendars and network canvases.
+- Pen, highlight blocks, eraser, custom colors, width controls, and drawing-specific undo/redo.
+- Network drawings follow pan and zoom without changing executable workflow revisions.
+- Calendar drawings stay separate by calendar, view and period.
+- Autosave, unsaved-draft recovery, and drawings in portable projects and backups.
+
+This unsigned test build preserves the existing app identity and vault. Drawings are currently desktop-only and are not included in AI context. See [the drawing guide](whiteboard.md). The published stable release remains 3.0.0.
+
 # Consilium 3.0.0 — first stable release
 
 - A Windows workspace for calendars, documents, conversations and visual AI workflows.

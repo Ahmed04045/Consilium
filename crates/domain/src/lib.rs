@@ -1,3 +1,4 @@
+pub mod annotations;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;

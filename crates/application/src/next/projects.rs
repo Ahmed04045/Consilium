@@ -164,6 +164,13 @@ impl Engine {
                 })?;
             }
             records.insert(identity.clone(), json!({"kind":kind,"id":id,"value":value}));
+            if ["calendar", "network"].contains(&kind.as_str()) {
+                for board in self.next_list("annotation")? {
+                    if board.value["owner_kind"] == kind && board.value["owner_id"] == id {
+                        pending.push(("annotation".into(), field(&board.value, "id")?.into()));
+                    }
+                }
+            }
             if kind == "calendar" {
                 for r in self.next_list("task")? {
                     if r.value["calendar_id"] == id {
@@ -344,7 +351,8 @@ impl Engine {
                     "label",
                     "document",
                     "occurrence",
-                    "addon"
+                    "addon",
+                    "annotation"
                 ]
                 .contains(&field(r, "kind")?),
                 "Unsupported project record"
@@ -415,6 +423,7 @@ impl Engine {
                         "executable_binding",
                         "network_id",
                         "addon_id",
+                        "owner_id",
                     ]
                     .contains(&field) =>
                 {
@@ -455,6 +464,7 @@ impl Engine {
             .get(field(&package["root"], "id")?)
             .context("Root record missing")?
             .clone();
+        let mut drawing_owners = BTreeSet::new();
         for r in records {
             let kind = field(r, "kind")?;
             let mut v = r["value"].clone();
@@ -510,6 +520,30 @@ impl Engine {
                 let addon: super::addons::ProgramAddon = decode(v["manifest"].clone())?;
                 addon.validate()?;
                 v["digest"] = json!(consilium_workflow::digest(&addon)?);
+            }
+            if kind == "annotation" {
+                if let (Some(original), Some(copy)) =
+                    (r["value"]["marks"].as_array(), v["marks"].as_array_mut())
+                {
+                    for (old, new) in original.iter().zip(copy) {
+                        new["id"] = old["id"].clone();
+                    }
+                }
+                let board: consilium_domain::annotations::AnnotationBoard = decode(v.clone())?;
+                board.validate()?;
+                ensure!(
+                    drawing_owners.insert((
+                        board.owner_kind.clone(),
+                        board.owner_id.clone(),
+                        board.view_key.clone()
+                    )),
+                    "Duplicate drawing view in project"
+                );
+                ensure!(
+                    records.iter().any(|r| r["kind"] == board.owner_kind
+                        && ids.get(r["id"].as_str().unwrap_or("")) == Some(&board.owner_id)),
+                    "Drawing owner missing from project"
+                );
             }
             if kind == "occurrence" {
                 let _: OccurrenceOverride = decode(v.clone())?;

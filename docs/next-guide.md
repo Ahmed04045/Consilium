@@ -2,6 +2,8 @@
 
 Stable release: **3.0.0**. See release-status.md for current verification; dated development notes below are historical.
 
+Development build **3.1.0-beta.1** adds [calendar and network drawings](whiteboard.md).
+
 ## Workspace
 
 Home is the starting tab. Create a calendar or network, pin existing objects, and use Customize to reorder, hide or resize reference widgets. Widgets do not duplicate records, start workflows or load document editors. Search in the title bar, or open the independent Search tab. Ctrl+K focuses search; Ctrl+N opens Create; Ctrl+P opens Assistant. Tabs retain their own selected items and drafts. Saved document editors unload when inactive.

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { readAppearance } from "../Customization";
+import { AnnotationBoard } from "./Annotations";
 import { ProjectFiles } from "./ProjectFiles";
 import {
   ChevronLeft,
@@ -11,6 +12,7 @@ import {
   MessageSquare,
   Folder,
   MoreHorizontal,
+  PenLine,
 } from "lucide-react";
 import {
   useWorkspace,
@@ -458,6 +460,7 @@ export function CalendarView({ id }: { id: string }) {
       calendar_id: id,
     }),
     [labelRevision, setLabelRevision] = useState(0);
+  const [drawing, setDrawing] = useState(false);
   const calendar = row(w.data, "calendar", id)?.value;
   const d = new Date(date + "T12:00:00");
   const first = new Date(d.getFullYear(), d.getMonth(), 1);
@@ -597,6 +600,14 @@ export function CalendarView({ id }: { id: string }) {
           })}
         </strong>
         <span className="nx-spacer" />
+        <button
+          aria-label="Draw on calendar"
+          title="Draw on calendar"
+          aria-pressed={drawing}
+          onClick={() => setDrawing(!drawing)}
+        >
+          <PenLine size={17} /> Draw
+        </button>
         <select
           aria-label="Calendar view"
           value={view}
@@ -648,6 +659,7 @@ export function CalendarView({ id }: { id: string }) {
           Completed {completed ? "on" : "off"}
         </button>
       </div>
+      <div className="nx-calendar-annotation-tools" />
       {view === "Month" ? (
         <div className="nx-month">
           <div className="nx-weekhead">
@@ -658,7 +670,15 @@ export function CalendarView({ id }: { id: string }) {
               <span key={day}>{day}</span>
             ))}
           </div>
-          <div className="nx-month-grid">
+          <div className="nx-month-grid nx-annotated">
+            <AnnotationBoard
+              key={`month:${days[0]}`}
+              ownerKind="calendar"
+              ownerId={id}
+              viewKey={`Month:${days[0]}`}
+              active={drawing}
+              onActive={setDrawing}
+            />
             {days.map((day) => (
               <div
                 className={`nx-day ${day.slice(0, 7) !== date.slice(0, 7) ? "outside" : ""}`}
@@ -707,7 +727,16 @@ export function CalendarView({ id }: { id: string }) {
               </div>
             ))}
           </div>
-          <div className="nx-hour-body">
+          <div className="nx-hour-body nx-annotated">
+            <AnnotationBoard
+              key={`${view}:${days[0]}`}
+              ownerKind="calendar"
+              ownerId={id}
+              viewKey={`${view}:${days[0]}`}
+              active={drawing}
+              onActive={setDrawing}
+              hourly
+            />
             <div>
               {Array.from({ length: 24 }, (_, i) => (
                 <div className="nx-hour-label" key={i}>
