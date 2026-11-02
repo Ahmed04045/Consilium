@@ -371,8 +371,10 @@ export default function App() {
         { ...data.workspace.value, onboarded: true, timezone: zone },
         false,
       )
-    )
+    ) {
+      navigate({ date: today(zone) });
       setOnboarding(false);
+    }
   }
   async function exportCalendar() {
     setMenu("");

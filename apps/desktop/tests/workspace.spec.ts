@@ -301,44 +301,51 @@ test("calendar customization persists and scales task positions with hour height
     page.getByRole("slider", { name: /Height of one hour/ }),
   ).toHaveValue("60");
 });
-test("empty calendar, persistent tasks, colors and undo", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await desktop(page);
-  await expect(page.locator(".calendar-task")).toHaveCount(0);
-  await page.keyboard.press("Control+n");
-  await page.getByLabel("Title", { exact: true }).fill("Read about Athens");
-  await page.getByRole("button", { name: "purple task color" }).click();
-  await page.getByRole("button", { name: "Save task", exact: true }).click();
-  await expect(page.locator(".calendar-task")).toHaveCount(1);
-  await expect(page.locator(".calendar-task")).toHaveClass(/color-purple/);
-  expect(
+test.describe("calendar persistence across timezone month boundaries", () => {
+  test.use({ timezoneId: "UTC" });
+  test("empty calendar, persistent tasks, colors and undo", async ({
+    page,
+  }) => {
+    // Qatar is already in November while onboarding selects the device's UTC timezone.
+    await page.clock.setFixedTime(new Date("2026-10-31T22:30:00Z"));
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await desktop(page);
+    await expect(page.locator(".calendar-task")).toHaveCount(0);
+    await page.keyboard.press("Control+n");
+    await page.getByLabel("Title", { exact: true }).fill("Read about Athens");
+    await page.getByRole("button", { name: "purple task color" }).click();
+    await page.getByRole("button", { name: "Save task", exact: true }).click();
+    await expect(page.locator(".calendar-task")).toHaveCount(1);
+    await expect(page.locator(".calendar-task")).toHaveClass(/color-purple/);
+    expect(
+      await page
+        .locator(".calendar-task")
+        .evaluate((e) => getComputedStyle(e).backgroundColor),
+    ).not.toBe("rgba(0, 0, 0, 0)");
+    await page.screenshot({ path: "../../docs/screenshots/task-blocks.png" });
+    await page.keyboard.press("Control+z");
+    await expect(page.locator(".calendar-task")).toHaveCount(0);
+    await page.keyboard.press("Control+y");
+    await expect(page.locator(".calendar-task")).toHaveCount(1);
+    await page.reload();
+    await expect(page.locator(".calendar-task")).toHaveCount(1);
+    await page.locator(".calendar-task").click();
+    await page.getByRole("button", { name: "Edit task", exact: true }).click();
     await page
-      .locator(".calendar-task")
-      .evaluate((e) => getComputedStyle(e).backgroundColor),
-  ).not.toBe("rgba(0, 0, 0, 0)");
-  await page.screenshot({ path: "../../docs/screenshots/task-blocks.png" });
-  await page.keyboard.press("Control+z");
-  await expect(page.locator(".calendar-task")).toHaveCount(0);
-  await page.keyboard.press("Control+y");
-  await expect(page.locator(".calendar-task")).toHaveCount(1);
-  await page.reload();
-  await expect(page.locator(".calendar-task")).toHaveCount(1);
-  await page.locator(".calendar-task").click();
-  await page.getByRole("button", { name: "Edit task", exact: true }).click();
-  await page
-    .getByRole("dialog")
-    .getByLabel("Completed", { exact: true })
-    .check();
-  await page.getByRole("button", { name: "Save task", exact: true }).click();
-  await page.getByRole("tab", { name: "Calendar", exact: true }).click();
-  await expect(page.locator(".calendar-task")).toHaveClass(/completed/);
-  await page.locator(".calendar-task").click();
-  await page.getByRole("button", { name: "Edit task", exact: true }).click();
-  await page.getByRole("button", { name: "Delete task" }).click();
-  await page.getByRole("tab", { name: "Calendar", exact: true }).click();
-  await expect(page.locator(".calendar-task")).toHaveCount(0);
-  expect(errors).toEqual([]);
+      .getByRole("dialog")
+      .getByLabel("Completed", { exact: true })
+      .check();
+    await page.getByRole("button", { name: "Save task", exact: true }).click();
+    await page.getByRole("tab", { name: "Calendar", exact: true }).click();
+    await expect(page.locator(".calendar-task")).toHaveClass(/completed/);
+    await page.locator(".calendar-task").click();
+    await page.getByRole("button", { name: "Edit task", exact: true }).click();
+    await page.getByRole("button", { name: "Delete task" }).click();
+    await page.getByRole("tab", { name: "Calendar", exact: true }).click();
+    await expect(page.locator(".calendar-task")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
 });
 test("tabs, navigation, keyboard menus and single local font", async ({
   page,
